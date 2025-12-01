@@ -238,5 +238,24 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="script.js"></script>
+    <script>
+  // Immediate UI update
+  document.addEventListener('DOMContentLoaded', function() {
+    // Force show user ID even if Firebase fails
+    const storedId = localStorage.getItem('playSync_userId');
+    if (storedId) {
+      const display = document.getElementById('userIdDisplay');
+      if (display) display.textContent = storedId;
+    }
+    
+    // Set status to online immediately
+    const statusText = document.getElementById('statusText');
+    const statusElement = document.getElementById('connectionStatus');
+    if (statusText) statusText.textContent = 'Online';
+    if (statusElement) {
+      statusElement.innerHTML = '<i class="fas fa-circle online"></i> Online';
+    }
+  });
+</script>
 </body>
 </html>
