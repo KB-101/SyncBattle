@@ -52,8 +52,36 @@ const games = {
 // =============================================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, starting app...');
+    
+    // Check if Firebase is loaded first
+    if (typeof firebase === 'undefined') {
+        console.error('Firebase not loaded!');
+        showToast('Firebase SDK failed to load. Check internet connection.', 'error');
+        showAppWithFallback();
+        return;
+    }
+    
     initApp();
 });
+
+function showAppWithFallback() {
+    // Hide loading, show app in offline mode
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('appContent').style.display = 'block';
+    
+    // Set user ID from localStorage or create one
+    let userId = localStorage.getItem('playSync_userId');
+    if (!userId) {
+        userId = generateUserId();
+        localStorage.setItem('playSync_userId', userId);
+    }
+    
+    document.getElementById('userIdDisplay').textContent = userId;
+    document.getElementById('statusText').textContent = 'Offline (Demo Mode)';
+    document.getElementById('statusDot').className = 'status-dot offline';
+    
+    showToast('Running in offline demo mode', 'warning');
+}
 
 async function initApp() {
     try {
@@ -71,93 +99,91 @@ async function initApp() {
         
         console.log('App ready!');
         
+        // Hide loading, show app
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.getElementById('appContent').style.display = 'block';
+        
     } catch (error) {
         console.error('App initialization failed:', error);
+        showAppWithFallback();
         showToast('App initialization failed: ' + error.message, 'error');
     }
 }
 
 // =============================================
-// FIREBASE INITIALIZATION (FIXED)
+// FIREBASE INITIALIZATION
 // =============================================
-async function initFirebase() {
-    console.log('Initializing Firebase...');
-    
-    try {
-        // Check if Firebase is loaded
-        if (typeof firebase === 'undefined') {
-            throw new Error('Firebase SDK not loaded. Check your internet connection.');
-        }
+function initFirebase() {
+    return new Promise((resolve, reject) => {
+        console.log('Initializing Firebase v8...');
         
-        console.log('Firebase SDK version:', firebase.SDK_VERSION);
-        
-        // Initialize Firebase app
-        if (!firebase.apps.length) {
+        try {
+            // Initialize Firebase
             app = firebase.initializeApp(firebaseConfig);
             console.log('Firebase app initialized');
-        } else {
-            app = firebase.app();
-            console.log('Using existing Firebase app');
-        }
-        
-        // Get auth and database instances
-        auth = firebase.auth();
-        database = firebase.database();
-        
-        // Test if auth and database are available
-        if (!auth || !database) {
-            throw new Error('Firebase modules not loaded properly');
-        }
-        
-        console.log('Firebase auth and database modules loaded');
-        
-        // Sign in anonymously
-        try {
-            const userCredential = await auth.signInAnonymously();
-            console.log('Anonymous sign-in successful, UID:', userCredential.user.uid);
             
-            // Listen for auth state changes
-            auth.onAuthStateChanged(function(user) {
-                if (user) {
-                    console.log('User authenticated:', user.uid);
-                    isFirebaseReady = true;
-                    updateConnectionStatus(true);
-                    showToast('Connected to PlaySync!', 'success');
-                    
-                    // Update user in database
-                    updateUserInFirebase();
-                } else {
-                    console.log('No user signed in');
-                    isFirebaseReady = false;
-                    updateConnectionStatus(false);
-                }
+            // Get auth and database
+            auth = firebase.auth();
+            database = firebase.database();
+            
+            console.log('Firebase modules loaded:', {
+                auth: !!auth,
+                database: !!database
             });
             
-        } catch (authError) {
-            console.error('Anonymous sign-in failed:', authError);
-            showToast('Using offline mode', 'warning');
+            // Sign in anonymously
+            auth.signInAnonymously().then(function(userCredential) {
+                console.log('Anonymous sign-in successful, UID:', userCredential.user.uid);
+                
+                // Set up auth state listener
+                auth.onAuthStateChanged(function(user) {
+                    if (user) {
+                        console.log('User authenticated:', user.uid);
+                        isFirebaseReady = true;
+                        appState.currentUser = {
+                            uid: user.uid,
+                            isAnonymous: user.isAnonymous
+                        };
+                        
+                        updateConnectionStatus(true);
+                        showToast('Connected to PlaySync!', 'success');
+                        
+                        // Update user in database
+                        updateUserInFirebase();
+                        resolve();
+                    } else {
+                        console.log('No user signed in');
+                        isFirebaseReady = false;
+                        reject(new Error('Authentication failed'));
+                    }
+                });
+                
+            }).catch(function(error) {
+                console.error('Anonymous sign-in failed:', error);
+                isFirebaseReady = false;
+                reject(error);
+            });
+            
+            // Monitor connection status
+            const connectedRef = database.ref('.info/connected');
+            connectedRef.on('value', function(snap) {
+                const connected = snap.val() === true;
+                console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
+                updateConnectionStatus(connected);
+            });
+            
+        } catch (error) {
+            console.error('Firebase initialization error:', error);
             isFirebaseReady = false;
+            reject(error);
         }
-        
-        // Monitor connection status
-        const connectedRef = database.ref('.info/connected');
-        connectedRef.on('value', function(snap) {
-            const connected = snap.val() === true;
-            console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
-            updateConnectionStatus(connected);
-        });
-        
-    } catch (error) {
-        console.error('Firebase initialization error:', error);
-        showToast('Firebase failed. Using offline mode.', 'warning');
-        isFirebaseReady = false;
-    }
+    });
 }
 
 // =============================================
 // USER MANAGEMENT
 // =============================================
-async function initUser() {
+function initUser() {
     // Load or create user ID
     let userId = localStorage.getItem('playSync_userId');
     let userName = localStorage.getItem('playSync_userName') || 'Player';
@@ -176,6 +202,8 @@ async function initUser() {
     if (nameInput) nameInput.value = userName;
     
     console.log('User initialized:', userId);
+    
+    return Promise.resolve();
 }
 
 function generateUserId() {
@@ -191,7 +219,7 @@ function generateSessionId() {
     return 'sess_' + Math.random().toString(36).substr(2, 9);
 }
 
-async function updateUserInFirebase() {
+function updateUserInFirebase() {
     if (!isFirebaseReady || !auth.currentUser) {
         console.log('Skipping Firebase update - not ready');
         return;
@@ -209,19 +237,19 @@ async function updateUserInFirebase() {
         updatedAt: Date.now()
     };
     
-    try {
-        await database.ref('users/' + auth.currentUser.uid).set(userData);
-        console.log('User saved to Firebase');
-        
-        // Store in appState
-        appState.currentUser = {
-            uid: auth.currentUser.uid,
-            ...userData
-        };
-        
-    } catch (error) {
-        console.error('Error saving user to Firebase:', error);
-    }
+    database.ref('users/' + auth.currentUser.uid).set(userData)
+        .then(function() {
+            console.log('User saved to Firebase');
+            
+            // Store in appState
+            appState.currentUser = {
+                uid: auth.currentUser.uid,
+                ...userData
+            };
+        })
+        .catch(function(error) {
+            console.error('Error saving user to Firebase:', error);
+        });
 }
 
 // =============================================
@@ -319,7 +347,7 @@ function updateConnectionStatus(connected) {
 // =============================================
 // FRIEND CONNECTION
 // =============================================
-async function connectToFriend() {
+function connectToFriend() {
     const friendId = document.getElementById('friendId').value.trim();
     
     if (!friendId) {
@@ -335,48 +363,46 @@ async function connectToFriend() {
     console.log('Searching for friend:', friendId);
     showToast('Searching for friend...', 'info');
     
-    try {
-        // Search all users for this public ID
-        const usersRef = database.ref('users');
-        const snapshot = await usersRef.once('value');
-        
-        let friendFound = null;
-        let friendUid = null;
-        
-        snapshot.forEach(function(childSnapshot) {
-            const userData = childSnapshot.val();
-            if (userData.publicId === friendId) {
-                friendFound = userData;
-                friendUid = childSnapshot.key;
-                return true; // Stop iterating
+    // Search all users for this public ID
+    database.ref('users').once('value')
+        .then(function(snapshot) {
+            let friendFound = null;
+            let friendUid = null;
+            
+            snapshot.forEach(function(childSnapshot) {
+                const userData = childSnapshot.val();
+                if (userData.publicId === friendId) {
+                    friendFound = userData;
+                    friendUid = childSnapshot.key;
+                    return true; // Stop iterating
+                }
+            });
+            
+            if (friendFound && friendUid) {
+                console.log('Friend found:', friendFound.name);
+                
+                // Store friend info
+                appState.friend = {
+                    uid: friendUid,
+                    ...friendFound
+                };
+                
+                // Setup real-time listener for friend
+                setupFriendListener();
+                
+                // Update UI
+                updateFriendInfo(friendFound);
+                
+                showToast(`Connected to ${friendFound.name}`, 'success');
+                
+            } else {
+                showToast('Friend not found. Make sure they are online.', 'error');
             }
+        })
+        .catch(function(error) {
+            console.error('Error connecting to friend:', error);
+            showToast('Error connecting to friend', 'error');
         });
-        
-        if (friendFound && friendUid) {
-            console.log('Friend found:', friendFound.name);
-            
-            // Store friend info
-            appState.friend = {
-                uid: friendUid,
-                ...friendFound
-            };
-            
-            // Setup real-time listener for friend
-            setupFriendListener();
-            
-            // Update UI
-            updateFriendInfo(friendFound);
-            
-            showToast(`Connected to ${friendFound.name}`, 'success');
-            
-        } else {
-            showToast('Friend not found. Make sure they are online.', 'error');
-        }
-        
-    } catch (error) {
-        console.error('Error connecting to friend:', error);
-        showToast('Error connecting to friend', 'error');
-    }
 }
 
 function setupFriendListener() {
@@ -443,7 +469,7 @@ function disconnectFriend() {
 // =============================================
 // GAME CHALLENGES
 // =============================================
-async function sendChallenge(gameType, gameId) {
+function sendChallenge(gameType, gameId) {
     if (!appState.friend) {
         showToast('Connect to a friend first', 'error');
         return;
@@ -477,21 +503,21 @@ async function sendChallenge(gameType, gameId) {
         sessionId: appState.sessionId
     };
     
-    try {
-        await database.ref('requests/' + appState.friend.uid + '/' + requestId).set(requestData);
-        showToast(`Challenge sent to ${appState.friend.name}`, 'success');
-        
-        // Add notification
-        addNotification({
-            type: 'sent',
-            message: `You challenged ${appState.friend.name} to ${gameInfo.name}`,
-            timestamp: Date.now()
+    database.ref('requests/' + appState.friend.uid + '/' + requestId).set(requestData)
+        .then(function() {
+            showToast(`Challenge sent to ${appState.friend.name}`, 'success');
+            
+            // Add notification
+            addNotification({
+                type: 'sent',
+                message: `You challenged ${appState.friend.name} to ${gameInfo.name}`,
+                timestamp: Date.now()
+            });
+        })
+        .catch(function(error) {
+            console.error('Error sending challenge:', error);
+            showToast('Failed to send challenge', 'error');
         });
-        
-    } catch (error) {
-        console.error('Error sending challenge:', error);
-        showToast('Failed to send challenge', 'error');
-    }
 }
 
 // =============================================
@@ -523,7 +549,7 @@ function showRequestModal(request) {
     }, 30000);
 }
 
-async function acceptChallenge() {
+function acceptChallenge() {
     const modal = document.getElementById('gameRequestModal');
     if (!modal || !isFirebaseReady) return;
     
@@ -531,13 +557,12 @@ async function acceptChallenge() {
     const senderUid = modal.dataset.senderUid;
     const gameInfo = JSON.parse(modal.dataset.gameInfo);
     
-    try {
-        // Update request status
-        await database.ref('requests/' + auth.currentUser.uid + '/' + requestId).update({
-            status: 'accepted',
-            respondedAt: Date.now()
-        });
-        
+    // Update request status
+    database.ref('requests/' + auth.currentUser.uid + '/' + requestId).update({
+        status: 'accepted',
+        respondedAt: Date.now()
+    })
+    .then(function() {
         // Open game
         openGame(gameInfo);
         
@@ -550,14 +575,14 @@ async function acceptChallenge() {
         
         showToast('Challenge accepted! Opening game...', 'success');
         modal.classList.remove('active');
-        
-    } catch (error) {
+    })
+    .catch(function(error) {
         console.error('Error accepting challenge:', error);
         showToast('Error accepting challenge', 'error');
-    }
+    });
 }
 
-async function declineChallenge() {
+function declineChallenge() {
     const modal = document.getElementById('gameRequestModal');
     if (!modal || !isFirebaseReady) return;
     
@@ -565,12 +590,11 @@ async function declineChallenge() {
     const senderUid = modal.dataset.senderUid;
     const gameInfo = JSON.parse(modal.dataset.gameInfo);
     
-    try {
-        await database.ref('requests/' + auth.currentUser.uid + '/' + requestId).update({
-            status: 'declined',
-            respondedAt: Date.now()
-        });
-        
+    database.ref('requests/' + auth.currentUser.uid + '/' + requestId).update({
+        status: 'declined',
+        respondedAt: Date.now()
+    })
+    .then(function() {
         addNotification({
             type: 'declined',
             message: `You declined ${gameInfo.fromName}'s challenge to ${gameInfo.gameName}`,
@@ -579,11 +603,11 @@ async function declineChallenge() {
         
         showToast('Challenge declined', 'info');
         modal.classList.remove('active');
-        
-    } catch (error) {
+    })
+    .catch(function(error) {
         console.error('Error declining challenge:', error);
         modal.classList.remove('active');
-    }
+    });
 }
 
 function openGame(gameInfo) {
@@ -668,7 +692,7 @@ function copyShareLink() {
     }
 }
 
-async function generateNewUserId() {
+function generateNewUserId() {
     if (!confirm('Generate a new user ID? This will disconnect you from your current friend.')) {
         return;
     }
@@ -682,7 +706,7 @@ async function generateNewUserId() {
     if (idDisplay) idDisplay.textContent = newId;
     
     if (isFirebaseReady) {
-        await updateUserInFirebase();
+        updateUserInFirebase();
     }
     
     showToast('New ID generated', 'success');
@@ -730,21 +754,6 @@ function checkUrlParams() {
 }
 
 // =============================================
-// SERVICE WORKER
-// =============================================
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('service-worker.js')
-            .then(function(registration) {
-                console.log('ServiceWorker registered:', registration.scope);
-            })
-            .catch(function(error) {
-                console.log('ServiceWorker registration failed:', error);
-            });
-    });
-}
-
-// =============================================
 // CLEANUP
 // =============================================
 window.addEventListener('beforeunload', function() {
@@ -772,15 +781,14 @@ window.addEventListener('offline', function() {
 });
 
 // =============================================
-// TEST FUNCTIONS
+// DEBUG FUNCTION
 // =============================================
 function testFirebase() {
     console.log('=== FIREBASE TEST ===');
     console.log('Firebase loaded:', typeof firebase !== 'undefined');
     console.log('Firebase SDK version:', firebase.SDK_VERSION);
-    console.log('Firebase app:', app);
-    console.log('Firebase auth:', auth);
-    console.log('Firebase database:', database);
+    console.log('Firebase auth:', firebase.auth);
+    console.log('Firebase database:', firebase.database);
     console.log('Current user:', auth?.currentUser);
     console.log('Firebase ready:', isFirebaseReady);
     console.log('=====================');
