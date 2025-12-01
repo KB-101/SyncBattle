@@ -1,4 +1,3 @@
-// PlaySync Arena Service Worker
 const CACHE_NAME = 'playsync-arena-v2.1.0';
 const urlsToCache = [
     '/',
