@@ -1,4 +1,4 @@
-const CACHE_NAME = 'syncbattle-v1.0.0';
+const CACHE_NAME = 'playsync-v1.0';
 const urlsToCache = [
   './',
   './index.html',
@@ -14,7 +14,7 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache');
+        console.log('Caching app shell');
         return cache.addAll(urlsToCache);
       })
   );
@@ -41,7 +41,7 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Cache hit - return response
+        // Return cached response if found
         if (response) {
           return response;
         }
@@ -50,7 +50,7 @@ self.addEventListener('fetch', event => {
         const fetchRequest = event.request.clone();
         
         return fetch(fetchRequest).then(response => {
-          // Check if valid response
+          // Don't cache if not a valid response
           if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
           }
@@ -65,23 +65,11 @@ self.addEventListener('fetch', event => {
             
           return response;
         }).catch(() => {
-          // If offline and request is for HTML, return cached index.html
+          // If offline and HTML request, return cached index.html
           if (event.request.headers.get('accept').includes('text/html')) {
-            return caches.match('/index.html');
+            return caches.match('./index.html');
           }
         });
       })
   );
 });
-
-// Background Sync (for future push notifications)
-self.addEventListener('sync', event => {
-  if (event.tag === 'sync-requests') {
-    event.waitUntil(syncRequests());
-  }
-});
-
-async function syncRequests() {
-  // Future implementation for background sync
-  console.log('Background sync triggered');
-}
