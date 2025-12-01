@@ -3,23 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Challenge App</title>
+    <title>PlaySync Arena - Real-time Game Challenges</title>
+    <meta name="description" content="Challenge friends to real-time games with instant notifications">
+    <meta name="theme-color" content="#1a1a2e">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Apple PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PlaySync Arena">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    
+    <!-- Styles -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
+    <!-- Theme Toggle -->
+    <div class="theme-toggle">
+        <button id="themeToggle">
+            <i class="fas fa-moon"></i> <span class="theme-text">Dark</span>
+        </button>
+    </div>
+
+    <!-- Install PWA Button -->
+    <div class="install-prompt" id="installPrompt">
+        <div class="install-content">
+            <i class="fas fa-download"></i>
+            <div class="install-text">
+                <strong>Install PlaySync Arena</strong>
+                <span>Get the app experience</span>
+            </div>
+            <button id="installBtn" class="btn primary small">Install</button>
+            <button id="dismissInstall" class="btn secondary small">&times;</button>
+        </div>
+    </div>
+
     <div class="container">
+        <!-- Header -->
         <header>
-            <h1><i class="fas fa-gamepad"></i> Game Challenge</h1>
-            <p class="subtitle">Challenge friends to play games in real-time</p>
+            <div class="logo-container">
+                <div class="logo">
+                    <i class="fas fa-gamepad"></i>
+                    <i class="fas fa-sync-alt"></i>
+                </div>
+                <div class="header-text">
+                    <h1>PlaySync Arena</h1>
+                    <p class="subtitle">Real-time game challenges with friends</p>
+                </div>
+            </div>
+            <div class="tagline">
+                <span class="tagline-badge"><i class="fas fa-bolt"></i> Instant Sync</span>
+                <span class="tagline-badge"><i class="fas fa-user-friends"></i> Two-Player</span>
+                <span class="tagline-badge"><i class="fas fa-cloud"></i> Cloud Powered</span>
+            </div>
         </header>
 
+        <!-- Main App -->
         <div class="app-wrapper">
+            <!-- Left Panel -->
             <div class="left-panel">
-                <div class="user-section">
+                <!-- User Profile -->
+                <div class="user-section card">
                     <h2><i class="fas fa-user"></i> Your Profile</h2>
                     <div class="user-info">
                         <div class="avatar">
@@ -29,36 +86,41 @@
                             <input type="text" id="username" placeholder="Enter your name" maxlength="20">
                             <div class="user-id">
                                 <span>Your ID:</span>
-                                <code id="userId">Not set</code>
+                                <code id="userId">Generating...</code>
                                 <button id="copyIdBtn" class="icon-btn" title="Copy ID">
                                     <i class="fas fa-copy"></i>
                                 </button>
                             </div>
-                            <!-- NEW: User Controls Section -->
+                            <!-- User Controls -->
                             <div class="user-controls">
                                 <button id="newUserBtn" class="btn secondary small">
                                     <i class="fas fa-user-plus"></i> New User
                                 </button>
                                 <button id="shareIdBtn" class="btn secondary small">
-                                    <i class="fas fa-share-alt"></i> Share ID
+                                    <i class="fas fa-share-alt"></i> Share
                                 </button>
                                 <button id="resetAppBtn" class="btn secondary small">
-                                    <i class="fas fa-redo"></i> Reset All
+                                    <i class="fas fa-redo"></i> Reset
                                 </button>
                             </div>
                         </div>
                     </div>
                     
+                    <!-- Status Indicator -->
                     <div class="status-indicator">
                         <div class="status-dot" id="statusDot"></div>
                         <span id="statusText">Offline</span>
+                        <span class="session-badge" id="sessionBadge" title="Session ID">
+                            <i class="fas fa-key"></i>
+                        </span>
                     </div>
                 </div>
 
-                <div class="friend-section">
+                <!-- Friend Connection -->
+                <div class="friend-section card">
                     <h2><i class="fas fa-users"></i> Connect with Friend</h2>
                     <div class="friend-input">
-                        <input type="text" id="friendId" placeholder="Enter friend's ID or Share Link">
+                        <input type="text" id="friendId" placeholder="Enter friend's ID or share link">
                         <button id="connectBtn" class="btn primary">
                             <i class="fas fa-link"></i> Connect
                         </button>
@@ -73,66 +135,82 @@
                 </div>
             </div>
 
+            <!-- Right Panel -->
             <div class="right-panel">
-                <div class="games-section">
+                <!-- Games Section -->
+                <div class="games-section card">
                     <h2><i class="fas fa-dice"></i> Available Games</h2>
                     <div class="games-grid">
+                        <!-- Pool Game -->
                         <div class="game-card" data-game="pool">
                             <div class="game-icon">
                                 <i class="fas fa-billiard-ball"></i>
                             </div>
                             <h3>8-Ball Pool</h3>
+                            <p class="game-description">Classic pool challenge</p>
                             <button class="btn challenge-btn" data-game="pool">
-                                <i class="fas fa-play"></i> Challenge to Pool
+                                <i class="fas fa-play"></i> Challenge
                             </button>
                         </div>
+                        <!-- Chess -->
                         <div class="game-card" data-game="chess">
                             <div class="game-icon">
                                 <i class="fas fa-chess"></i>
                             </div>
                             <h3>Chess</h3>
+                            <p class="game-description">Strategic battle</p>
                             <button class="btn challenge-btn" data-game="chess">
-                                <i class="fas fa-play"></i> Challenge to Chess
+                                <i class="fas fa-play"></i> Challenge
                             </button>
                         </div>
+                        <!-- Poker -->
                         <div class="game-card" data-game="poker">
                             <div class="game-icon">
                                 <i class="fas fa-spade"></i>
                             </div>
                             <h3>Poker</h3>
+                            <p class="game-description">Texas Hold'em</p>
                             <button class="btn challenge-btn" data-game="poker">
-                                <i class="fas fa-play"></i> Challenge to Poker
+                                <i class="fas fa-play"></i> Challenge
                             </button>
                         </div>
+                        <!-- Tic-Tac-Toe -->
                         <div class="game-card" data-game="tictactoe">
                             <div class="game-icon">
                                 <i class="fas fa-times"></i>
                             </div>
                             <h3>Tic-Tac-Toe</h3>
+                            <p class="game-description">Quick 3-in-a-row</p>
                             <button class="btn challenge-btn" data-game="tictactoe">
-                                <i class="fas fa-play"></i> Challenge to Tic-Tac-Toe
+                                <i class="fas fa-play"></i> Challenge
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <div class="notifications-section">
-                    <h2><i class="fas fa-bell"></i> Notifications</h2>
+                <!-- Notifications -->
+                <div class="notifications-section card">
+                    <div class="notifications-header">
+                        <h2><i class="fas fa-bell"></i> Notifications</h2>
+                        <button id="clearNotificationsBtn" class="btn secondary small">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
+                    </div>
                     <div class="notifications-container" id="notificationsContainer">
                         <div class="empty-notifications">
                             <i class="fas fa-inbox"></i>
                             <p>No notifications yet</p>
+                            <small>Game challenges will appear here</small>
                         </div>
                     </div>
-                    <div class="notifications-controls">
-                        <button id="clearNotificationsBtn" class="btn secondary small">
-                            <i class="fas fa-trash"></i> Clear All
-                        </button>
+                    <div class="notifications-stats">
+                        <span id="notificationCount">0 notifications</span>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Toast Notification -->
         <div class="notification-toast" id="notificationToast">
             <div class="toast-content">
                 <i class="fas fa-bell"></i>
@@ -144,7 +222,7 @@
             </div>
         </div>
 
-        <!-- NEW: Share Link Modal -->
+        <!-- Share Modal -->
         <div class="modal" id="shareModal">
             <div class="modal-content">
                 <div class="modal-header">
@@ -157,67 +235,148 @@
                             <h3>Share Link</h3>
                             <div class="share-input">
                                 <input type="text" id="shareLink" readonly>
-                                <button id="copyLinkBtn" class="btn primary">
+                                <button id="copyLinkBtn" class="btn primary small">
                                     <i class="fas fa-copy"></i> Copy
                                 </button>
                             </div>
-                            <p class="share-hint">Send this link to your friend. When they open it, they'll automatically use your ID.</p>
+                            <p class="share-hint">Send this link to your friend</p>
                         </div>
                         
                         <div class="share-option">
                             <h3>Direct ID</h3>
                             <div class="share-input">
                                 <input type="text" id="directId" readonly>
-                                <button id="copyDirectIdBtn" class="btn primary">
+                                <button id="copyDirectIdBtn" class="btn primary small">
                                     <i class="fas fa-copy"></i> Copy ID
                                 </button>
                             </div>
-                            <p class="share-hint">Your friend can enter this ID manually in their app.</p>
+                            <p class="share-hint">Friend can enter this ID manually</p>
                         </div>
                         
                         <div class="share-option">
                             <h3>QR Code</h3>
                             <div class="qr-container" id="qrCodeContainer">
-                                <p>Generating QR code...</p>
+                                <div class="qr-placeholder">
+                                    <i class="fas fa-qrcode"></i>
+                                </div>
                             </div>
-                            <p class="share-hint">Scan with a mobile device to open the app with your ID.</p>
+                            <p class="share-hint">Scan with a mobile device</p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <footer>
-            <p>This app uses Firebase Realtime Database for real-time sync. No backend server needed!</p>
-            <p class="footer-info">Each device gets a unique ID. Use "New User" to create different IDs on the same device.</p>
-        </footer>
-    </div>
-
-    <!-- Game Request Modal -->
-    <div class="modal" id="requestModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-gamepad"></i> Game Challenge</h2>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="requestInfo">
-                    <!-- Dynamic content will be inserted here -->
+        <!-- Game Request Modal -->
+        <div class="modal" id="requestModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-gamepad"></i> Game Challenge</h2>
+                    <button class="modal-close">&times;</button>
                 </div>
-                <div class="modal-actions">
-                    <button id="acceptBtn" class="btn success">
-                        <i class="fas fa-check"></i> Accept Challenge
-                    </button>
-                    <button id="declineBtn" class="btn danger">
-                        <i class="fas fa-times"></i> Decline
-                    </button>
+                <div class="modal-body">
+                    <div id="requestInfo">
+                        <!-- Dynamic content -->
+                    </div>
+                    <div class="modal-actions">
+                        <button id="acceptBtn" class="btn success">
+                            <i class="fas fa-check"></i> Accept
+                        </button>
+                        <button id="declineBtn" class="btn danger">
+                            <i class="fas fa-times"></i> Decline
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- About Modal -->
+        <div class="modal" id="aboutModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-info-circle"></i> About PlaySync Arena</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="about-content">
+                        <div class="about-logo">
+                            <div class="logo">
+                                <i class="fas fa-gamepad"></i>
+                                <i class="fas fa-sync-alt"></i>
+                            </div>
+                            <h3>PlaySync Arena</h3>
+                        </div>
+                        <p>Real-time game challenge platform for two players. Challenge friends instantly and play together!</p>
+                        
+                        <div class="features-list">
+                            <h4><i class="fas fa-star"></i> Features</h4>
+                            <ul>
+                                <li><i class="fas fa-sync-alt"></i> Real-time notifications</li>
+                                <li><i class="fas fa-user-friends"></i> Two-player challenges</li>
+                                <li><i class="fas fa-share-alt"></i> Easy ID sharing</li>
+                                <li><i class="fas fa-mobile-alt"></i> PWA - Install as app</li>
+                                <li><i class="fas fa-cloud"></i> Firebase backend</li>
+                                <li><i class="fas fa-gamepad"></i> Multiple games</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="how-to-use">
+                            <h4><i class="fas fa-question-circle"></i> How to Use</h4>
+                            <ol>
+                                <li>Set your username</li>
+                                <li>Share your ID with friend</li>
+                                <li>Connect using friend's ID</li>
+                                <li>Send game challenges</li>
+                                <li>Accept challenges to play</li>
+                            </ol>
+                        </div>
+                        
+                        <div class="privacy-note">
+                            <h4><i class="fas fa-shield-alt"></i> Privacy</h4>
+                            <p>All data is stored temporarily and automatically cleaned up. No personal data is collected permanently.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p><span class="brand">PlaySync Arena</span> - Real-time game challenges made simple</p>
+            <p class="tech-info">Powered by Firebase Realtime Database</p>
+            <p class="footer-info">Each device gets a unique ID. Use "New User" for different IDs on same device.</p>
+            
+            <div class="footer-links">
+                <a href="#" id="aboutLink"><i class="fas fa-info-circle"></i> About</a>
+                <a href="#" id="howToLink"><i class="fas fa-question-circle"></i> How to Use</a>
+                <a href="#" id="refreshLink"><i class="fas fa-sync-alt"></i> Refresh Connection</a>
+            </div>
+            
+            <div class="app-version">
+                <span>Version 2.0.0</span>
+                <span class="connection-status-badge" id="firebaseStatus">
+                    <i class="fas fa-circle"></i> Connecting...
+                </span>
+            </div>
+        </footer>
     </div>
 
-    <!-- QR Code Library -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+
+    <!-- Main App Script -->
     <script src="script.js"></script>
 </body>
 </html>
