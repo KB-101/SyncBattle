@@ -1,2 +1,17 @@
+# Allow search engines to index
 User-agent: *
-Disallow: /
+Allow: /
+Allow: /index.html
+Allow: /manifest.json
+Allow: /service-worker.js
+
+# Allow all files needed for the app
+Allow: /*.css
+Allow: /*.js
+Allow: /*.json
+
+# Disallow nothing
+Disallow:
+
+# Sitemap location (optional)
+# Sitemap: https://kb-101.github.io/SyncBattle/sitemap.xml
