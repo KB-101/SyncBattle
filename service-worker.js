@@ -9,17 +9,28 @@ const urlsToCache = [
 ];
 
 // Install service worker
-self.addEventListener('install', event => {
+self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
+      .then(function(cache) {
+        console.log('Caching app shell');
+        return cache.addAll(urlsToCache);
+      })
   );
 });
 
 // Fetch event
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', function(event) {
   event.respondWith(
     caches.match(event.request)
-      .then(response => response || fetch(event.request))
+      .then(function(response) {
+        // Return cached response if found
+        if (response) {
+          return response;
+        }
+        
+        // Otherwise fetch from network
+        return fetch(event.request);
+      })
   );
 });
