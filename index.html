@@ -249,5 +249,16 @@
     </div>
 
     <script src="script.js"></script>
+    <script>
+  // Quick debug
+  console.log('Script loaded');
+  console.log('Firebase available:', typeof firebase !== 'undefined');
+  
+  if (typeof firebase !== 'undefined') {
+    console.log('Firebase SDK version:', firebase.SDK_VERSION);
+    console.log('Firebase.auth:', typeof firebase.auth);
+    console.log('Firebase.database:', typeof firebase.database);
+  }
+</script>
 </body>
 </html>
