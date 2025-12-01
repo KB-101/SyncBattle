@@ -1,15 +1,12 @@
-const CACHE_NAME = 'playsync-v1.0.0';
+const CACHE_NAME = 'syncbattle-v1.0.0';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/script.js',
-  '/manifest.json',
+  './',
+  './index.html',
+  './style.css',
+  './script.js',
+  './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://img.icons8.com/color/96/000000/game-controller.png',
-  'https://img.icons8.com/color/144/000000/game-controller.png',
-  'https://img.icons8.com/color/192/000000/game-controller.png',
-  'https://img.icons8.com/color/512/000000/game-controller.png'
+  'https://img.icons8.com/color/96/000000/game-controller.png'
 ];
 
 // Install Service Worker
