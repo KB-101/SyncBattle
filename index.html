@@ -8,257 +8,290 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <!-- Load ALL Firebase v8 modules at once -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase.js"></script>
     
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" type="image/x-icon" href="https://img.icons8.com/color/96/000000/game-controller.png">
+    
+    <style>
+        /* Add minimal loading style */
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: white;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 4px solid #4361ee;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <h1><i class="fas fa-gamepad"></i> PlaySync Arena</h1>
-            <p class="tagline">Challenge friends to play Android games together</p>
-        </header>
+    <!-- Loading screen -->
+    <div id="loadingScreen" class="loading">
+        <div class="spinner"></div>
+        <p>Loading PlaySync Arena...</p>
+    </div>
 
-        <main>
-            <div class="app-layout">
-                <!-- Left Panel -->
-                <div class="left-panel">
-                    <!-- User Profile Card -->
-                    <div class="card user-profile">
-                        <h2><i class="fas fa-user"></i> Your Profile</h2>
-                        <div class="form-group">
-                            <label for="userName">Your Name</label>
-                            <input type="text" id="userName" placeholder="Enter your name" maxlength="20">
-                        </div>
-                        <div class="form-group">
-                            <label>Your ID</label>
-                            <div class="id-display">
-                                <span id="userIdDisplay">Loading...</span>
-                                <button id="copyIdBtn" class="icon-btn" title="Copy ID">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                                <button id="shareIdBtn" class="icon-btn" title="Share ID">
-                                    <i class="fas fa-share-alt"></i>
-                                </button>
+    <!-- Main app (hidden until loaded) -->
+    <div id="appContent" style="display: none;">
+        <div class="container">
+            <!-- Header -->
+            <header>
+                <h1><i class="fas fa-gamepad"></i> PlaySync Arena</h1>
+                <p class="tagline">Challenge friends to play Android games together</p>
+            </header>
+
+            <main>
+                <div class="app-layout">
+                    <!-- Left Panel -->
+                    <div class="left-panel">
+                        <!-- User Profile Card -->
+                        <div class="card user-profile">
+                            <h2><i class="fas fa-user"></i> Your Profile</h2>
+                            <div class="form-group">
+                                <label for="userName">Your Name</label>
+                                <input type="text" id="userName" placeholder="Enter your name" maxlength="20">
                             </div>
-                        </div>
-                        <button id="newIdBtn" class="btn secondary">
-                            <i class="fas fa-redo"></i> Generate New ID
-                        </button>
-                        <div class="status-indicator">
-                            <span class="status-dot" id="statusDot"></span>
-                            <span id="statusText">Connecting...</span>
-                        </div>
-                    </div>
-
-                    <!-- Friend Connection Card -->
-                    <div class="card friend-connect">
-                        <h2><i class="fas fa-user-friends"></i> Connect Friend</h2>
-                        <div class="form-group">
-                            <label for="friendId">Friend's ID</label>
-                            <input type="text" id="friendId" placeholder="Enter friend's ID">
-                            <button id="connectBtn" class="btn primary">
-                                <i class="fas fa-plug"></i> Connect
+                            <div class="form-group">
+                                <label>Your ID</label>
+                                <div class="id-display">
+                                    <span id="userIdDisplay">Generating...</span>
+                                    <button id="copyIdBtn" class="icon-btn" title="Copy ID">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                    <button id="shareIdBtn" class="icon-btn" title="Share ID">
+                                        <i class="fas fa-share-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button id="newIdBtn" class="btn secondary">
+                                <i class="fas fa-redo"></i> Generate New ID
                             </button>
+                            <div class="status-indicator">
+                                <span class="status-dot" id="statusDot"></span>
+                                <span id="statusText">Offline</span>
+                            </div>
                         </div>
-                        
-                        <div id="friendInfo" class="friend-info hidden">
-                            <h3>Connected Friend</h3>
-                            <div class="friend-details">
-                                <div class="friend-name">
-                                    <i class="fas fa-user-circle"></i>
-                                    <span id="friendName">Friend Name</span>
-                                </div>
-                                <div class="friend-status">
-                                    <span class="status-dot" id="friendStatusDot"></span>
-                                    <span id="friendStatusText">Checking...</span>
-                                </div>
-                                <button id="disconnectBtn" class="btn danger small">
-                                    <i class="fas fa-times"></i> Disconnect
+
+                        <!-- Friend Connection Card -->
+                        <div class="card friend-connect">
+                            <h2><i class="fas fa-user-friends"></i> Connect Friend</h2>
+                            <div class="form-group">
+                                <label for="friendId">Friend's ID</label>
+                                <input type="text" id="friendId" placeholder="Enter friend's ID">
+                                <button id="connectBtn" class="btn primary">
+                                    <i class="fas fa-plug"></i> Connect
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right Panel -->
-                <div class="right-panel">
-                    <!-- Games Grid -->
-                    <div class="card games-grid">
-                        <h2><i class="fas fa-gamepad"></i> Popular Android Games</h2>
-                        <p class="subtitle">Send challenge to play these games with your friend</p>
-                        
-                        <div class="games-container">
-                            <!-- Game 1: 8 Ball Pool -->
-                            <div class="game-card" data-game="pool" data-game-id="com.billiards.city.pool.nation.club">
-                                <div class="game-icon">
-                                    <i class="fas fa-basketball-ball"></i>
-                                </div>
-                                <div class="game-info">
-                                    <h3>8 Ball Pool</h3>
-                                    <p>Classic billiards game</p>
-                                    <div class="game-actions">
-                                        <button class="btn challenge-btn primary">
-                                            <i class="fas fa-bolt"></i> Challenge
-                                        </button>
+                            
+                            <div id="friendInfo" class="friend-info hidden">
+                                <h3>Connected Friend</h3>
+                                <div class="friend-details">
+                                    <div class="friend-name">
+                                        <i class="fas fa-user-circle"></i>
+                                        <span id="friendName">Friend Name</span>
                                     </div>
-                                </div>
-                            </div>
-
-                            <!-- Game 2: Chess -->
-                            <div class="game-card" data-game="chess" data-game-id="com.chess">
-                                <div class="game-icon">
-                                    <i class="fas fa-chess"></i>
-                                </div>
-                                <div class="game-info">
-                                    <h3>Chess</h3>
-                                    <p>Strategic board game</p>
-                                    <div class="game-actions">
-                                        <button class="btn challenge-btn primary">
-                                            <i class="fas fa-bolt"></i> Challenge
-                                        </button>
+                                    <div class="friend-status">
+                                        <span class="status-dot" id="friendStatusDot"></span>
+                                        <span id="friendStatusText">Checking...</span>
                                     </div>
-                                </div>
-                            </div>
-
-                            <!-- Game 3: Ludo King -->
-                            <div class="game-card" data-game="ludo" data-game-id="com.ludo.king">
-                                <div class="game-icon">
-                                    <i class="fas fa-dice"></i>
-                                </div>
-                                <div class="game-info">
-                                    <h3>Ludo King</h3>
-                                    <p>Classic board game</p>
-                                    <div class="game-actions">
-                                        <button class="btn challenge-btn primary">
-                                            <i class="fas fa-bolt"></i> Challenge
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Game 4: Custom Game -->
-                            <div class="game-card custom-game">
-                                <div class="game-icon">
-                                    <i class="fas fa-plus"></i>
-                                </div>
-                                <div class="game-info">
-                                    <h3>Custom Game</h3>
-                                    <p>Challenge to any Android game</p>
-                                    <div class="game-actions">
-                                        <input type="text" id="customGameId" placeholder="Game Package ID">
-                                        <button id="customChallengeBtn" class="btn primary">
-                                            <i class="fas fa-bolt"></i> Challenge
-                                        </button>
-                                    </div>
+                                    <button id="disconnectBtn" class="btn danger small">
+                                        <i class="fas fa-times"></i> Disconnect
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Notifications Panel -->
-                    <div class="card notifications-panel">
-                        <h2><i class="fas fa-bell"></i> Notifications</h2>
-                        <div id="notificationsList" class="notifications-list">
-                            <div class="empty-state">
-                                <i class="fas fa-inbox"></i>
-                                <p>No notifications yet</p>
+                    <!-- Right Panel -->
+                    <div class="right-panel">
+                        <!-- Games Grid -->
+                        <div class="card games-grid">
+                            <h2><i class="fas fa-gamepad"></i> Popular Android Games</h2>
+                            <p class="subtitle">Send challenge to play these games with your friend</p>
+                            
+                            <div class="games-container">
+                                <!-- Game 1: 8 Ball Pool -->
+                                <div class="game-card" data-game="pool" data-game-id="com.billiards.city.pool.nation.club">
+                                    <div class="game-icon">
+                                        <i class="fas fa-basketball-ball"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <h3>8 Ball Pool</h3>
+                                        <p>Classic billiards game</p>
+                                        <div class="game-actions">
+                                            <button class="btn challenge-btn primary">
+                                                <i class="fas fa-bolt"></i> Challenge
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Game 2: Chess -->
+                                <div class="game-card" data-game="chess" data-game-id="com.chess">
+                                    <div class="game-icon">
+                                        <i class="fas fa-chess"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <h3>Chess</h3>
+                                        <p>Strategic board game</p>
+                                        <div class="game-actions">
+                                            <button class="btn challenge-btn primary">
+                                                <i class="fas fa-bolt"></i> Challenge
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Game 3: Ludo King -->
+                                <div class="game-card" data-game="ludo" data-game-id="com.ludo.king">
+                                    <div class="game-icon">
+                                        <i class="fas fa-dice"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <h3>Ludo King</h3>
+                                        <p>Classic board game</p>
+                                        <div class="game-actions">
+                                            <button class="btn challenge-btn primary">
+                                                <i class="fas fa-bolt"></i> Challenge
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Game 4: Custom Game -->
+                                <div class="game-card custom-game">
+                                    <div class="game-icon">
+                                        <i class="fas fa-plus"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <h3>Custom Game</h3>
+                                        <p>Challenge to any Android game</p>
+                                        <div class="game-actions">
+                                            <input type="text" id="customGameId" placeholder="Game Package ID">
+                                            <button id="customChallengeBtn" class="btn primary">
+                                                <i class="fas fa-bolt"></i> Challenge
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notifications Panel -->
+                        <div class="card notifications-panel">
+                            <h2><i class="fas fa-bell"></i> Notifications</h2>
+                            <div id="notificationsList" class="notifications-list">
+                                <div class="empty-state">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>No notifications yet</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </main>
+            </main>
 
-        <!-- Footer -->
-        <footer>
-            <div class="footer-content">
-                <div class="footer-section">
-                    <span id="connectionStatus" class="connection-status">
-                        <i class="fas fa-circle offline"></i> Connecting...
-                    </span>
+            <!-- Footer -->
+            <footer>
+                <div class="footer-content">
+                    <div class="footer-section">
+                        <span id="connectionStatus" class="connection-status">
+                            <i class="fas fa-circle offline"></i> Connecting...
+                        </span>
+                    </div>
+                    <div class="footer-section">
+                        <span class="version">v1.0.0</span>
+                        <button id="installBtn" class="btn secondary small hidden">
+                            <i class="fas fa-download"></i> Install App
+                        </button>
+                    </div>
                 </div>
-                <div class="footer-section">
-                    <span class="version">v1.0.0</span>
-                    <button id="installBtn" class="btn secondary small hidden">
-                        <i class="fas fa-download"></i> Install App
-                    </button>
+            </footer>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toastContainer" class="toast-container"></div>
+
+        <!-- Share Modal -->
+        <div id="shareModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-share-alt"></i> Share Your ID</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Share this link with your friend:</p>
+                    <div class="share-link">
+                        <input type="text" id="shareLink" readonly>
+                        <button id="copyLinkBtn" class="btn primary">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <p class="share-note">When your friend opens this link, they will automatically be able to connect with you.</p>
                 </div>
             </div>
-        </footer>
-    </div>
+        </div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="toast-container"></div>
-
-    <!-- Share Modal -->
-    <div id="shareModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-share-alt"></i> Share Your ID</h3>
-                <button class="close-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Share this link with your friend:</p>
-                <div class="share-link">
-                    <input type="text" id="shareLink" readonly>
-                    <button id="copyLinkBtn" class="btn primary">
-                                        <i class="fas fa-copy"></i> Copy
-                    </button>
+        <!-- Game Request Modal -->
+        <div id="gameRequestModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-gamepad"></i> Game Challenge</h3>
+                    <button class="close-modal">&times;</button>
                 </div>
-                <p class="share-note">When your friend opens this link, they will automatically be able to connect with you.</p>
+                <div class="modal-body">
+                    <p id="requestMessage">Loading...</p>
+                    <div class="game-request-actions">
+                        <button id="acceptRequestBtn" class="btn success">
+                            <i class="fas fa-check"></i> Accept & Open Game
+                        </button>
+                        <button id="declineRequestBtn" class="btn danger">
+                            <i class="fas fa-times"></i> Decline
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Game Request Modal -->
-    <div id="gameRequestModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-gamepad"></i> Game Challenge</h3>
-                <button class="close-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p id="requestMessage">Loading...</p>
-                <div class="game-request-actions">
-                    <button id="acceptRequestBtn" class="btn success">
-                        <i class="fas fa-check"></i> Accept & Open Game
-                    </button>
-                    <button id="declineRequestBtn" class="btn danger">
-                        <i class="fas fa-times"></i> Decline
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <p>Connecting to PlaySync...</p>
-            <p id="loadingMessage" class="loading-message"></p>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
+    <!-- Simple test script -->
     <script>
-  // Quick debug
-  console.log('Script loaded');
-  console.log('Firebase available:', typeof firebase !== 'undefined');
-  
-  if (typeof firebase !== 'undefined') {
-    console.log('Firebase SDK version:', firebase.SDK_VERSION);
-    console.log('Firebase.auth:', typeof firebase.auth);
-    console.log('Firebase.database:', typeof firebase.database);
-  }
-</script>
+        console.log('Testing Firebase v8 loading...');
+        
+        // Wait for Firebase to load
+        setTimeout(function() {
+            console.log('Firebase available:', typeof firebase !== 'undefined');
+            if (typeof firebase !== 'undefined') {
+                console.log('Firebase SDK version:', firebase.SDK_VERSION);
+                console.log('Firebase.auth:', typeof firebase.auth);
+                console.log('Firebase.database:', typeof firebase.database);
+                console.log('Firebase object:', firebase);
+                
+                // Show app if Firebase loaded
+                if (firebase.auth && firebase.database) {
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('appContent').style.display = 'block';
+                    console.log('Firebase loaded successfully!');
+                }
+            }
+        }, 1000);
+    </script>
+    
+    <!-- Main app script -->
+    <script src="script.js"></script>
 </body>
 </html>
