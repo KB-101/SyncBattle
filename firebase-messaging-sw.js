@@ -1,9 +1,8 @@
 // Firebase Messaging Service Worker
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
-import { initializeApp } from "firebase/app";
 
-// Your Firebase config (same as main app)
+// Your Firebase config 
 const firebaseConfig = {
   apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
   authDomain: "playsync-arena.firebaseapp.com",
@@ -12,9 +11,6 @@ const firebaseConfig = {
   messagingSenderId: "989668959512",
   appId: "1:989668959512:web:016b68c8fb932f2e9d2a6d"
 };
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
 
 // Initialize Firebase Messaging
 const messaging = firebase.messaging();
