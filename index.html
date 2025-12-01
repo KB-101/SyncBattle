@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PlaySync Arena - Play Android Games with Friends</title>
     <meta name="description" content="Challenge friends to play Android games together">
-    <!-- Fix for mobile web app capability -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
@@ -49,8 +53,8 @@
                             <i class="fas fa-redo"></i> Generate New ID
                         </button>
                         <div class="status-indicator">
-                            <span class="status-dot online"></span>
-                            <span id="statusText">Online</span>
+                            <span class="status-dot" id="statusDot"></span>
+                            <span id="statusText">Connecting...</span>
                         </div>
                     </div>
 
@@ -74,7 +78,7 @@
                                 </div>
                                 <div class="friend-status">
                                     <span class="status-dot" id="friendStatusDot"></span>
-                                    <span id="friendStatusText">Offline</span>
+                                    <span id="friendStatusText">Checking...</span>
                                 </div>
                                 <button id="disconnectBtn" class="btn danger small">
                                     <i class="fas fa-times"></i> Disconnect
@@ -206,7 +210,7 @@
                 <div class="share-link">
                     <input type="text" id="shareLink" readonly>
                     <button id="copyLinkBtn" class="btn primary">
-                        <i class="fas fa-copy"></i> Copy
+                                        <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
                 <p class="share-note">When your friend opens this link, they will automatically be able to connect with you.</p>
@@ -219,6 +223,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-gamepad"></i> Game Challenge</h3>
+                <button class="close-modal">&times;</button>
             </div>
             <div class="modal-body">
                 <p id="requestMessage">Loading...</p>
@@ -234,28 +239,15 @@
         </div>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>Connecting to PlaySync...</p>
+            <p id="loadingMessage" class="loading-message"></p>
+        </div>
+    </div>
+
     <script src="script.js"></script>
-    <script>
-  // Immediate UI update
-  document.addEventListener('DOMContentLoaded', function() {
-    // Force show user ID even if Firebase fails
-    const storedId = localStorage.getItem('playSync_userId');
-    if (storedId) {
-      const display = document.getElementById('userIdDisplay');
-      if (display) display.textContent = storedId;
-    }
-    
-    // Set status to online immediately
-    const statusText = document.getElementById('statusText');
-    const statusElement = document.getElementById('connectionStatus');
-    if (statusText) statusText.textContent = 'Online';
-    if (statusElement) {
-      statusElement.innerHTML = '<i class="fas fa-circle online"></i> Online';
-    }
-  });
-</script>
 </body>
 </html>
