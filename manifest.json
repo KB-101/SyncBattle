@@ -4,9 +4,11 @@
   "description": "Real-time game challenges with friends",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a1a2e",
+  "background_color": "#0f172a",
   "theme_color": "#4361ee",
   "orientation": "portrait",
+  "scope": "/",
+  "lang": "en",
   "categories": ["games", "social", "entertainment"],
   "icons": [
     {
@@ -63,13 +65,39 @@
       "src": "screenshots/mobile.png",
       "sizes": "1080x1920",
       "type": "image/png",
-      "form_factor": "narrow"
+      "form_factor": "narrow",
+      "label": "Mobile view of game challenges"
     },
     {
       "src": "screenshots/desktop.png",
       "sizes": "1920x1080",
       "type": "image/png",
-      "form_factor": "wide"
+      "form_factor": "wide",
+      "label": "Desktop view with real-time notifications"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Pool Challenge",
+      "short_name": "Pool",
+      "description": "Challenge a friend to pool",
+      "url": "/?action=challenge&game=pool",
+      "icons": [{ "src": "icons/pool-icon.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "New Chess Challenge",
+      "short_name": "Chess",
+      "description": "Challenge a friend to chess",
+      "url": "/?action=challenge&game=chess",
+      "icons": [{ "src": "icons/chess-icon.png", "sizes": "96x96" }]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "protocol_handlers": [
+    {
+      "protocol": "web+playsync",
+      "url": "/?userid=%s"
     }
   ]
 }
