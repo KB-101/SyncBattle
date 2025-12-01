@@ -1,6 +1,7 @@
 const firebaseConfig = {
   apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
   authDomain: "playsync-arena.firebaseapp.com",
+  databaseURL: "https://playsync-arena-default-rtdb.firebaseio.com",
   projectId: "playsync-arena",
   storageBucket: "playsync-arena.firebasestorage.app",
   messagingSenderId: "989668959512",
