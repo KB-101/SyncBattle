@@ -14,4 +14,4 @@ Allow: /*.json
 Disallow:
 
 # Sitemap location (optional)
-Sitemap: https://kb-101.github.io/SyncBattle/sitemap.xml
+# Sitemap: https://kb-101.github.io/SyncBattle/sitemap.xml
