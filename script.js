@@ -1,6 +1,3 @@
-// Firebase Configuration 
-import { initializeApp } from "firebase/app";
-
 const firebaseConfig = {
   apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
   authDomain: "playsync-arena.firebaseapp.com",
@@ -9,9 +6,6 @@ const firebaseConfig = {
   messagingSenderId: "989668959512",
   appId: "1:989668959512:web:016b68c8fb932f2e9d2a6d"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 
 // Firebase Service
 class FirebaseService {
