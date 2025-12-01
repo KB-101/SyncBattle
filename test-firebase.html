@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Test</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script>
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
+  authDomain: "playsync-arena.firebaseapp.com",
+  projectId: "playsync-arena",
+  storageBucket: "playsync-arena.firebasestorage.app",
+  messagingSenderId: "989668959512",
+  appId: "1:989668959512:web:016b68c8fb932f2e9d2a6d"
+};
+        
+        async function testFirebase() {
+            console.log('🔄 Testing Firebase connection...');
+            
+            try {
+                // Initialize Firebase
+                const app = firebase.initializeApp(firebaseConfig);
+                console.log('✅ Firebase App initialized');
+                
+                // Get database instance
+                const database = firebase.database();
+                console.log('✅ Database instance created');
+                
+                // Get auth instance
+                const auth = firebase.auth();
+                console.log('✅ Auth instance created');
+                
+                // Test connection
+                const connectedRef = database.ref('.info/connected');
+                connectedRef.on('value', (snap) => {
+                    console.log(`📡 Connection status: ${snap.val() ? '✅ CONNECTED' : '❌ DISCONNECTED'}`);
+                    document.getElementById('status').textContent = 
+                        snap.val() ? '✅ CONNECTED TO FIREBASE' : '❌ DISCONNECTED';
+                });
+                
+                // Test anonymous auth
+                console.log('🔐 Attempting anonymous sign-in...');
+                const userCredential = await auth.signInAnonymously();
+                console.log('✅ Anonymous sign-in successful:', userCredential.user.uid);
+                document.getElementById('auth').textContent = '✅ AUTHENTICATED ANONYMOUSLY';
+                
+                // Test database write
+                console.log('💾 Testing database write...');
+                await database.ref('test/' + Date.now()).set({
+                    message: 'Firebase test successful',
+                    timestamp: Date.now()
+                });
+                console.log('✅ Database write successful');
+                document.getElementById('db').textContent = '✅ DATABASE WRITE SUCCESSFUL';
+                
+                // Test database read
+                console.log('📖 Testing database read...');
+                const snapshot = await database.ref('test').limitToLast(1).once('value');
+                console.log('✅ Database read successful:', snapshot.val());
+                document.getElementById('result').textContent = 
+                    JSON.stringify(snapshot.val(), null, 2);
+                    
+            } catch (error) {
+                console.error('❌ Firebase error:', error);
+                document.getElementById('error').textContent = error.message;
+            }
+        }
+        
+        window.onload = testFirebase;
+    </script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { padding: 10px; margin: 5px; border-radius: 5px; }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        #error { background: #f8d7da; color: #721c24; padding: 10px; margin: 10px 0; }
+        #result { background: #d1ecf1; color: #0c5460; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Firebase Connection Test</h1>
+    <div id="status" class="status">Testing...</div>
+    <div id="auth" class="status">Checking auth...</div>
+    <div id="db" class="status">Checking database...</div>
+    <div id="result"></div>
+    <div id="error"></div>
+</body>
+</html>
