@@ -1,103 +1,16 @@
 {
   "name": "PlaySync Arena",
   "short_name": "PlaySync",
-  "description": "Real-time game challenges with friends",
+  "description": "Real-time game challenges",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
+  "background_color": "#1a1a2e",
   "theme_color": "#4361ee",
-  "orientation": "portrait",
-  "scope": "/",
-  "lang": "en",
-  "categories": ["games", "social", "entertainment"],
   "icons": [
     {
-      "src": "icons/icon-72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-192.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "screenshots/mobile.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Mobile view of game challenges"
-    },
-    {
-      "src": "screenshots/desktop.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Desktop view with real-time notifications"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "New Pool Challenge",
-      "short_name": "Pool",
-      "description": "Challenge a friend to pool",
-      "url": "/?action=challenge&game=pool",
-      "icons": [{ "src": "icons/pool-icon.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "New Chess Challenge",
-      "short_name": "Chess",
-      "description": "Challenge a friend to chess",
-      "url": "/?action=challenge&game=chess",
-      "icons": [{ "src": "icons/chess-icon.png", "sizes": "96x96" }]
-    }
-  ],
-  "related_applications": [],
-  "prefer_related_applications": false,
-  "protocol_handlers": [
-    {
-      "protocol": "web+playsync",
-      "url": "/?userid=%s"
+      "type": "image/png"
     }
   ]
 }
