@@ -22,7 +22,6 @@ const firebaseConfig = {
 let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDatabase = null;
-let firebaseMessaging = null;
 let isFirebaseReady = false;
 let isOnline = false;
 
@@ -60,6 +59,112 @@ const GAMES_DB = {
 };
 
 // =============================================
+// UTILITY FUNCTIONS
+// =============================================
+function updateConnectionStatus(connected) {
+    const statusElement = document.getElementById('connectionStatus');
+    const statusText = document.getElementById('statusText');
+    const statusDot = document.getElementById('statusDot');
+    const connectionText = document.getElementById('connectionText');
+    
+    if (connected) {
+        if (statusElement) {
+            statusElement.innerHTML = '<i class="fas fa-circle online"></i> Online';
+        }
+        if (statusText) statusText.textContent = 'Online';
+        if (statusDot) statusDot.className = 'status-dot online';
+        if (connectionText) connectionText.textContent = 'Online';
+        isOnline = true;
+    } else {
+        if (statusElement) {
+            statusElement.innerHTML = '<i class="fas fa-circle offline"></i> Offline';
+        }
+        if (statusText) statusText.textContent = 'Offline';
+        if (statusDot) statusDot.className = 'status-dot';
+        if (connectionText) connectionText.textContent = 'Offline';
+        isOnline = false;
+    }
+}
+
+function showAppContent() {
+    const loadingScreen = document.getElementById('loadingScreen');
+    const appContent = document.getElementById('appContent');
+    
+    if (loadingScreen) loadingScreen.style.display = 'none';
+    if (appContent) appContent.style.display = 'block';
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icons = {
+        success: 'check-circle',
+        error: 'exclamation-circle',
+        warning: 'exclamation-triangle',
+        info: 'info-circle'
+    };
+    
+    toast.innerHTML = `
+        <i class="fas fa-${icons[type] || 'info-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => {
+            if (toast.parentNode === container) {
+                container.removeChild(toast);
+            }
+        }, 300);
+    }, 5000);
+}
+
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    return date.toLocaleDateString();
+}
+
+function generateUserId() {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let id = '';
+    for (let i = 0; i < 8; i++) {
+        id += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return id;
+}
+
+function addNotification(notification) {
+    notification.id = 'notif_' + Date.now();
+    appState.notifications.unshift(notification);
+    
+    if (notification.unread) {
+        appState.unreadNotifications++;
+    }
+    
+    // Keep only last 100 notifications
+    if (appState.notifications.length > 100) {
+        appState.notifications = appState.notifications.slice(0, 100);
+    }
+    
+    // Save and update UI
+    savePersistentState();
+    updateNotificationsUI();
+}
+
+// =============================================
 // INITIALIZATION
 // =============================================
 document.addEventListener('DOMContentLoaded', async function() {
@@ -89,6 +194,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 // PERSISTENT STATE MANAGEMENT
 // =============================================
 function loadPersistentState() {
+    console.log('Loading persistent state...');
+    
     // Load user data
     appState.userId = localStorage.getItem('playSync_userId') || generateUserId();
     appState.userName = localStorage.getItem('playSync_userName') || 'Player';
@@ -142,107 +249,119 @@ function restorePreviousSession() {
 }
 
 // =============================================
-// FIREBASE INITIALIZATION
+// FIREBASE INITIALIZATION (FIXED)
 // =============================================
 async function initializeFirebase() {
+    console.log('Initializing Firebase...');
+    
     try {
         // Initialize Firebase
         firebaseApp = firebase.initializeApp(firebaseConfig);
         firebaseAuth = firebase.auth();
         firebaseDatabase = firebase.database();
         
-        // Enable offline persistence
-        firebaseDatabase.setPersistenceEnabled(true);
+        console.log('Firebase app initialized');
+        
+        // Enable persistence with catch for compatibility
+        if (firebaseDatabase.enablePersistence) {
+            try {
+                await firebaseDatabase.enablePersistence();
+                console.log('Database persistence enabled');
+            } catch (err) {
+                console.warn('Database persistence error:', err);
+            }
+        }
         
         // Sign in anonymously
         await firebaseAuth.signInAnonymously();
+        console.log('Anonymous sign-in successful');
         
         // Setup connection monitoring
-        firebaseDatabase.ref('.info/connected').on('value', (snapshot) => {
+        firebaseDatabase.ref('.info/connected').on('value', function(snapshot) {
             const connected = snapshot.val() === true;
+            isOnline = connected;
             updateConnectionStatus(connected);
-            
-            if (connected) {
-                setupPresenceSystem();
-                syncWithFirebase();
-            }
+            console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
         });
         
-        // Setup auth state listener
-        firebaseAuth.onAuthStateChanged((user) => {
+        // Listen for auth state changes
+        firebaseAuth.onAuthStateChanged(function(user) {
             if (user) {
                 console.log('User authenticated:', user.uid);
                 isFirebaseReady = true;
-                setupRealtimeListeners();
+                
+                // Update user in database
+                updateUserInFirebase();
+                
+                // Setup Firebase listeners
+                setupFirebaseListeners();
+                
                 showToast('Connected to PlaySync!', 'success');
+                
+            } else {
+                console.log('No user signed in');
+                isFirebaseReady = false;
+                updateConnectionStatus(false);
             }
         });
         
     } catch (error) {
         console.error('Firebase initialization failed:', error);
-        showToast('Using offline mode', 'warning');
+        showToast('Firebase connection failed. Using offline mode.', 'warning');
+        isFirebaseReady = false;
         updateConnectionStatus(false);
     }
 }
 
-function setupPresenceSystem() {
-    if (!firebaseAuth.currentUser) return;
+async function updateUserInFirebase() {
+    if (!isFirebaseReady || !firebaseAuth.currentUser) {
+        console.log('Skipping Firebase update - not ready');
+        return;
+    }
     
-    const userId = firebaseAuth.currentUser.uid;
-    const userStatusRef = firebaseDatabase.ref('status/' + userId);
-    const userDataRef = firebaseDatabase.ref('users/' + userId);
+    const userId = appState.userId;
+    const userName = appState.userName;
     
-    // Create user data
-    userDataRef.set({
-        id: appState.userId,
-        name: appState.userName,
+    const userData = {
+        publicId: userId,
+        name: userName,
+        status: 'online',
         lastSeen: Date.now(),
-        online: true,
-        friends: appState.friends.map(f => f.id),
-        deviceInfo: {
-            platform: navigator.platform,
-            userAgent: navigator.userAgent
-        }
-    });
+        sessionId: appState.activeSession?.id,
+        updatedAt: Date.now()
+    };
     
-    // Update status
-    userStatusRef.onDisconnect().set({
-        online: false,
-        lastSeen: Date.now()
-    });
-    
-    userStatusRef.set({
-        online: true,
-        lastSeen: Date.now(),
-        sessionId: appState.activeSession?.id
-    });
-}
-
-function syncWithFirebase() {
-    if (!isFirebaseReady) return;
-    
-    const userId = firebaseAuth.currentUser.uid;
-    const userRef = firebaseDatabase.ref('users/' + userId);
-    
-    // Sync user data
-    userRef.update({
-        name: appState.userName,
-        lastSeen: Date.now(),
-        friends: appState.friends.map(f => f.id)
-    });
-    
-    // Sync active session
-    if (appState.activeSession) {
-        firebaseDatabase.ref('sessions/' + appState.activeSession.id).update({
-            updatedAt: Date.now(),
-            participants: appState.activeSession.participants
-        });
+    try {
+        await firebaseDatabase.ref('users/' + firebaseAuth.currentUser.uid).set(userData);
+        console.log('User updated in Firebase');
+        
+    } catch (error) {
+        console.error('Error updating user in Firebase:', error);
     }
 }
 
 // =============================================
-// REALTIME LISTENERS
+// FIREBASE LISTENERS
 // =============================================
+function setupFirebaseListeners() {
+    if (!isFirebaseReady) {
+        console.log('Skipping Firebase listeners - not ready');
+        return;
+    }
+    
+    // Listen for incoming game requests
+    if (firebaseAuth.currentUser) {
+        firebaseDatabase.ref('requests/' + firebaseAuth.currentUser.uid)
+            .orderByChild('status')
+            .equalTo('pending')
+            .on('child_added', function(snapshot) {
+                const request = snapshot.val();
+                request.id = snapshot.key;
+                showGameRequestModal(request);
+            });
+    }
+}
+
 function setupRealtimeListeners() {
     if (!isFirebaseReady) return;
     
@@ -375,348 +494,6 @@ function updateFriendStatus(friendId, status) {
 }
 
 // =============================================
-// GAME SESSIONS
-// =============================================
-async function startGameSession(gameType, friendId) {
-    const friend = appState.friends.find(f => f.id === friendId);
-    if (!friend) {
-        showToast('Friend not found', 'error');
-        return;
-    }
-    
-    const gameInfo = GAMES_DB[gameType] || {
-        name: 'Custom Game',
-        packageId: gameType,
-        storeUrl: `https://play.google.com/store/apps/details?id=${gameType}`,
-        intentUrl: `intent://details?id=${gameType}#Intent;scheme=market;end`
-    };
-    
-    const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    
-    appState.activeSession = {
-        id: sessionId,
-        game: gameType,
-        gameInfo: gameInfo,
-        participants: [appState.userId, friendId],
-        timestamp: Date.now(),
-        status: 'active'
-    };
-    
-    // Save to Firebase
-    if (isFirebaseReady) {
-        await firebaseDatabase.ref('sessions/' + sessionId).set({
-            game: gameType,
-            gameInfo: gameInfo,
-            participants: [appState.userId, friendId],
-            createdBy: appState.userId,
-            createdAt: Date.now(),
-            status: 'active'
-        });
-    }
-    
-    // Save locally
-    savePersistentState();
-    
-    // Update UI
-    updateActiveSessionUI();
-    
-    // Send invite to friend
-    sendGameInvite(friend, gameInfo, sessionId);
-    
-    showToast(`Game session started with ${friend.name}`, 'success');
-}
-
-function updateActiveSession(sessionData) {
-    if (!appState.activeSession || appState.activeSession.id !== sessionData.id) return;
-    
-    appState.activeSession = {
-        ...appState.activeSession,
-        ...sessionData
-    };
-    
-    updateActiveSessionUI();
-    savePersistentState();
-}
-
-function endGameSession() {
-    if (!appState.activeSession) return;
-    
-    const sessionId = appState.activeSession.id;
-    
-    // Update Firebase
-    if (isFirebaseReady) {
-        firebaseDatabase.ref('sessions/' + sessionId).update({
-            status: 'ended',
-            endedAt: Date.now()
-        });
-    }
-    
-    appState.activeSession = null;
-    localStorage.removeItem('playSync_activeSession');
-    
-    // Update UI
-    document.getElementById('activeSessionCard').classList.add('hidden');
-    
-    showToast('Game session ended', 'info');
-}
-
-// =============================================
-// GAME INVITES
-// =============================================
-async function sendGameInvite(friend, gameInfo, sessionId) {
-    if (!isFirebaseReady || !friend.firebaseId) return;
-    
-    const inviteId = 'inv_' + Date.now();
-    
-    const inviteData = {
-        from: appState.userId,
-        fromName: appState.userName,
-        game: gameInfo.name,
-        gamePackageId: gameInfo.packageId,
-        gameIntentUrl: gameInfo.intentUrl,
-        sessionId: sessionId,
-        timestamp: Date.now(),
-        status: 'pending'
-    };
-    
-    try {
-        await firebaseDatabase.ref(`invites/${friend.firebaseId}/${inviteId}`).set(inviteData);
-        
-        // Add notification
-        addNotification({
-            type: 'invite_sent',
-            message: `Invited ${friend.name} to play ${gameInfo.name}`,
-            timestamp: Date.now(),
-            data: { friendId: friend.id, game: gameInfo.name }
-        });
-        
-    } catch (error) {
-        console.error('Error sending invite:', error);
-        showToast('Failed to send invite', 'error');
-    }
-}
-
-function handleIncomingInvite(invite) {
-    // Find friend who sent the invite
-    const friend = appState.friends.find(f => f.id === invite.from);
-    if (!friend) {
-        // Add as friend if not already
-        addFriend(invite.from);
-    }
-    
-    // Add notification
-    addNotification({
-        type: 'invite_received',
-        message: `${invite.fromName} invited you to play ${invite.game}`,
-        timestamp: invite.timestamp,
-        data: invite,
-        unread: true
-    });
-    
-    // Show push notification
-    showPushNotification(invite.fromName, `Invited you to play ${invite.game}`);
-    
-    // Auto-accept if app is in foreground
-    if (document.visibilityState === 'visible') {
-        showGameInviteModal(invite, friend);
-    }
-}
-
-async function acceptGameInvite(invite, friend) {
-    if (!isFirebaseReady) return;
-    
-    try {
-        // Update invite status
-        await firebaseDatabase.ref(`invites/${firebaseAuth.currentUser.uid}/${invite.id}`).update({
-            status: 'accepted',
-            respondedAt: Date.now()
-        });
-        
-        // Join the session
-        appState.activeSession = {
-            id: invite.sessionId,
-            game: invite.game,
-            gameInfo: GAMES_DB[invite.game] || {
-                name: invite.game,
-                packageId: invite.gamePackageId,
-                intentUrl: invite.gameIntentUrl
-            },
-            participants: [invite.from, appState.userId],
-            timestamp: Date.now(),
-            status: 'active'
-        };
-        
-        // Save locally
-        savePersistentState();
-        
-        // Update UI
-        updateActiveSessionUI();
-        
-        // Add notification
-        addNotification({
-            type: 'invite_accepted',
-            message: `You accepted ${invite.fromName}'s invite to ${invite.game}`,
-            timestamp: Date.now()
-        });
-        
-        // Open the game on BOTH devices
-        openAndroidGame(invite.gamePackageId, invite.gameIntentUrl);
-        
-        // Notify the inviter
-        sendGameSyncNotification(friend, 'accepted', invite.sessionId);
-        
-        showToast('Game accepted! Opening...', 'success');
-        
-    } catch (error) {
-        console.error('Error accepting invite:', error);
-        showToast('Failed to accept invite', 'error');
-    }
-}
-
-function openAndroidGame(packageId, intentUrl) {
-    // Try to open with intent:// URL
-    const intent = intentUrl || `intent://details?id=${packageId}#Intent;scheme=market;end`;
-    
-    // Open on this device
-    window.location.href = intent;
-    
-    // Send sync signal to friend
-    syncGameWithFriend(packageId);
-}
-
-function syncGameWithFriend(packageId) {
-    // This would ideally use Firebase Cloud Messaging to send a push notification
-    // For now, we'll update the session in Firebase
-    if (appState.activeSession && isFirebaseReady) {
-        firebaseDatabase.ref('sessions/' + appState.activeSession.id).update({
-            syncTime: Date.now(),
-            lastSyncBy: appState.userId
-        });
-    }
-}
-
-// =============================================
-// MESSAGING SYSTEM
-// =============================================
-async function sendMessage(friendId, message) {
-    const friend = appState.friends.find(f => f.id === friendId);
-    if (!friend || !friend.firebaseId) return;
-    
-    const messageId = 'msg_' + Date.now();
-    const messageData = {
-        from: appState.userId,
-        fromName: appState.userName,
-        to: friendId,
-        message: message,
-        timestamp: Date.now(),
-        type: 'text'
-    };
-    
-    try {
-        // Save to Firebase
-        await firebaseDatabase.ref(`messages/${friend.firebaseId}/${messageId}`).set(messageData);
-        
-        // Add to local chat
-        addChatMessage({
-            ...messageData,
-            direction: 'sent'
-        });
-        
-    } catch (error) {
-        console.error('Error sending message:', error);
-    }
-}
-
-function handleIncomingMessage(message) {
-    // Add to chat if from current friend
-    if (appState.currentFriend && appState.currentFriend.id === message.from) {
-        addChatMessage({
-            ...message,
-            direction: 'received'
-        });
-    }
-    
-    // Add notification
-    addNotification({
-        type: 'message',
-        message: `${message.fromName}: ${message.message}`,
-        timestamp: message.timestamp,
-        unread: true
-    });
-    
-    // Show push notification
-    showPushNotification(message.fromName, message.message);
-}
-
-// =============================================
-// NOTIFICATIONS SYSTEM
-// =============================================
-function addNotification(notification) {
-    notification.id = 'notif_' + Date.now();
-    appState.notifications.unshift(notification);
-    
-    if (notification.unread) {
-        appState.unreadNotifications++;
-    }
-    
-    // Keep only last 100 notifications
-    if (appState.notifications.length > 100) {
-        appState.notifications = appState.notifications.slice(0, 100);
-    }
-    
-    // Save and update UI
-    savePersistentState();
-    updateNotificationsUI();
-}
-
-function markNotificationAsRead(notificationId) {
-    const notification = appState.notifications.find(n => n.id === notificationId);
-    if (notification && notification.unread) {
-        notification.unread = false;
-        appState.unreadNotifications = Math.max(0, appState.unreadNotifications - 1);
-        updateNotificationsUI();
-        savePersistentState();
-    }
-}
-
-function clearAllNotifications() {
-    appState.notifications = [];
-    appState.unreadNotifications = 0;
-    updateNotificationsUI();
-    savePersistentState();
-}
-
-// =============================================
-// PUSH NOTIFICATIONS
-// =============================================
-function showPushNotification(title, body) {
-    if (!("Notification" in window)) return;
-    
-    if (Notification.permission === "granted") {
-        const options = {
-            body: body,
-            icon: 'icons/icon-96.png',
-            badge: 'icons/icon-96.png',
-            tag: 'playsync-notification',
-            renotify: true,
-            actions: [
-                {
-                    action: 'open',
-                    title: 'Open App'
-                }
-            ]
-        };
-        
-        const notification = new Notification(title, options);
-        
-        notification.onclick = function() {
-            window.focus();
-            this.close();
-        };
-    }
-}
-
-// =============================================
 // UI UPDATES
 // =============================================
 function updateAllUI() {
@@ -790,7 +567,10 @@ function updateOnlineFriendsUI() {
     `).join('');
     
     // Update online count
-    document.getElementById('onlineCount').textContent = onlineFriends.length;
+    const onlineCount = document.getElementById('onlineCount');
+    if (onlineCount) {
+        onlineCount.textContent = onlineFriends.length;
+    }
 }
 
 function updateActiveSessionUI() {
@@ -798,29 +578,31 @@ function updateActiveSessionUI() {
     const sessionInfo = document.getElementById('sessionInfo');
     
     if (!appState.activeSession) {
-        container.classList.add('hidden');
+        if (container) container.classList.add('hidden');
         return;
     }
     
-    container.classList.remove('hidden');
+    if (container) container.classList.remove('hidden');
     
     const session = appState.activeSession;
-    const otherParticipants = session.participants.filter(p => p !== appState.userId);
+    const otherParticipants = session.participants ? session.participants.filter(p => p !== appState.userId) : [];
     
-    sessionInfo.innerHTML = `
-        <div class="session-game-icon">
-            <i class="fas fa-gamepad"></i>
-        </div>
-        <div class="session-details">
-            <h3>${session.gameInfo.name}</h3>
-            <div class="session-players">
-                Playing with: ${otherParticipants.join(', ')}
+    if (sessionInfo) {
+        sessionInfo.innerHTML = `
+            <div class="session-game-icon">
+                <i class="fas fa-gamepad"></i>
             </div>
-            <div class="session-time">
-                Started: ${formatTime(session.timestamp)}
+            <div class="session-details">
+                <h3>${session.gameInfo?.name || 'Custom Game'}</h3>
+                <div class="session-players">
+                    Playing with: ${otherParticipants.join(', ') || 'No one'}
+                </div>
+                <div class="session-time">
+                    Started: ${formatTime(session.timestamp)}
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 }
 
 function updateNotificationsUI() {
@@ -855,39 +637,129 @@ function updateNotificationsUI() {
 
 function updateConnectionUI() {
     const statusElement = document.getElementById('connectionStatus');
-    const statusText = document.getElementById('connectionText');
+    const statusText = document.getElementById('statusText');
     const statusDot = document.getElementById('statusDot');
+    const connectionText = document.getElementById('connectionText');
     
     if (isOnline) {
-        statusDot.className = 'status-dot online';
-        statusText.textContent = 'Online';
-        statusElement.innerHTML = '<i class="fas fa-circle online"></i> Online';
+        if (statusElement) {
+            statusElement.innerHTML = '<i class="fas fa-circle online"></i> Online';
+        }
+        if (statusText) statusText.textContent = 'Online';
+        if (statusDot) statusDot.className = 'status-dot online';
+        if (connectionText) connectionText.textContent = 'Online';
     } else {
-        statusDot.className = 'status-dot';
-        statusText.textContent = 'Offline';
-        statusElement.innerHTML = '<i class="fas fa-circle offline"></i> Offline';
+        if (statusElement) {
+            statusElement.innerHTML = '<i class="fas fa-circle offline"></i> Offline';
+        }
+        if (statusText) statusText.textContent = 'Offline';
+        if (statusDot) statusDot.className = 'status-dot';
+        if (connectionText) connectionText.textContent = 'Offline';
     }
+}
+
+function updateActiveSession(sessionData) {
+    if (!appState.activeSession || appState.activeSession.id !== sessionData.id) return;
+    
+    appState.activeSession = {
+        ...appState.activeSession,
+        ...sessionData
+    };
+    
+    updateActiveSessionUI();
+    savePersistentState();
 }
 
 // =============================================
 // EVENT LISTENERS SETUP
 // =============================================
 function setupEventListeners() {
-    // Add friend button
-    document.getElementById('connectBtn').addEventListener('click', () => {
-        const friendId = document.getElementById('friendId').value.trim();
-        addFriend(friendId);
-        document.getElementById('friendId').value = '';
-    });
+    console.log('Setting up event listeners...');
     
-    // Send message
-    document.getElementById('sendMessageBtn').addEventListener('click', () => {
-        const messageInput = document.getElementById('messageInput');
-        const message = messageInput.value.trim();
-        if (message && appState.currentFriend) {
-            sendMessage(appState.currentFriend.id, message);
-            messageInput.value = '';
-        }
+    // Add friend button
+    const connectBtn = document.getElementById('connectBtn');
+    if (connectBtn) {
+        connectBtn.addEventListener('click', () => {
+            const friendIdInput = document.getElementById('friendId');
+            if (friendIdInput) {
+                const friendId = friendIdInput.value.trim();
+                addFriend(friendId);
+                friendIdInput.value = '';
+            }
+        });
+    }
+    
+    // Copy ID button
+    const copyIdBtn = document.getElementById('copyIdBtn');
+    if (copyIdBtn) {
+        copyIdBtn.addEventListener('click', () => {
+            const userId = appState.userId;
+            navigator.clipboard.writeText(userId)
+                .then(() => showToast('ID copied to clipboard', 'success'))
+                .catch(err => showToast('Failed to copy ID', 'error'));
+        });
+    }
+    
+    // User name changes
+    const userNameInput = document.getElementById('userName');
+    if (userNameInput) {
+        userNameInput.addEventListener('change', (e) => {
+            appState.userName = e.target.value;
+            savePersistentState();
+            if (isFirebaseReady) {
+                updateUserInFirebase();
+            }
+        });
+    }
+    
+    // Notifications panel
+    const notificationToggle = document.getElementById('notificationToggle');
+    if (notificationToggle) {
+        notificationToggle.addEventListener('click', () => {
+            const panel = document.getElementById('notificationsPanel');
+            if (panel) panel.classList.toggle('active');
+        });
+    }
+    
+    const clearNotificationsBtn = document.getElementById('clearNotificationsBtn');
+    if (clearNotificationsBtn) {
+        clearNotificationsBtn.addEventListener('click', clearAllNotifications);
+    }
+    
+    // Session actions
+    const syncGameBtn = document.getElementById('syncGameBtn');
+    if (syncGameBtn) {
+        syncGameBtn.addEventListener('click', () => {
+            if (appState.activeSession) {
+                syncGameWithFriend(appState.activeSession.gameInfo?.packageId);
+                showToast('Sync sent to friend', 'success');
+            }
+        });
+    }
+    
+    const endSessionBtn = document.getElementById('endSessionBtn');
+    if (endSessionBtn) {
+        endSessionBtn.addEventListener('click', endGameSession);
+    }
+    
+    // Utility buttons
+    const clearCacheBtn = document.getElementById('clearCacheBtn');
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', clearCache);
+    }
+    
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', showSettings);
+    }
+    
+    // Modals
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.classList.remove('active');
+            });
+        });
     });
     
     // Quick messages
@@ -896,9 +768,31 @@ function setupEventListeners() {
             const message = btn.dataset.msg;
             if (appState.currentFriend) {
                 sendMessage(appState.currentFriend.id, message);
+            } else {
+                showToast('Select a friend first', 'warning');
             }
         });
     });
+    
+    // Friend actions delegation
+    const friendsList = document.getElementById('friendsList');
+    if (friendsList) {
+        friendsList.addEventListener('click', (e) => {
+            const friendItem = e.target.closest('.friend-item');
+            if (!friendItem) return;
+            
+            const friendId = friendItem.dataset.friendId;
+            const friend = appState.friends.find(f => f.id === friendId);
+            
+            if (e.target.closest('.friend-action-btn[data-action="message"]')) {
+                setCurrentFriend(friend);
+            } else if (e.target.closest('.friend-action-btn[data-action="invite"]')) {
+                showGameSelectorForFriend(friend);
+            } else {
+                showFriendModal(friend);
+            }
+        });
+    }
     
     // Game challenges
     document.querySelectorAll('.game-action-btn[data-action="challenge"]').forEach(btn => {
@@ -910,170 +804,163 @@ function setupEventListeners() {
     });
     
     // Custom game challenge
-    document.querySelector('.game-action-btn[data-action="challenge-custom"]').addEventListener('click', () => {
-        const gameId = document.querySelector('.custom-game-input').value.trim();
-        if (gameId) {
-            showFriendSelectorForGame(gameId);
-        } else {
-            showToast('Enter game package ID', 'error');
-        }
-    });
-    
-    // Friend actions delegation
-    document.getElementById('friendsList').addEventListener('click', (e) => {
-        const friendItem = e.target.closest('.friend-item');
-        if (!friendItem) return;
-        
-        const friendId = friendItem.dataset.friendId;
-        const friend = appState.friends.find(f => f.id === friendId);
-        
-        if (e.target.closest('.friend-action-btn[data-action="message"]')) {
-            setCurrentFriend(friend);
-        } else if (e.target.closest('.friend-action-btn[data-action="invite"]')) {
-            showGameSelectorForFriend(friend);
-        } else {
-            showFriendModal(friend);
-        }
-    });
-    
-    // Session actions
-    document.getElementById('syncGameBtn').addEventListener('click', () => {
-        if (appState.activeSession) {
-            syncGameWithFriend(appState.activeSession.gameInfo.packageId);
-            showToast('Sync sent to friend', 'success');
-        }
-    });
-    
-    document.getElementById('endSessionBtn').addEventListener('click', endGameSession);
-    
-    // Notifications panel
-    document.getElementById('notificationToggle').addEventListener('click', () => {
-        document.getElementById('notificationsPanel').classList.toggle('active');
-    });
-    
-    document.getElementById('clearNotificationsBtn').addEventListener('click', clearAllNotifications);
-    
-    // Modals
-    document.querySelectorAll('.close-modal').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.modal').forEach(modal => {
-                modal.classList.remove('active');
-            });
+    const customChallengeBtn = document.querySelector('.game-action-btn[data-action="challenge-custom"]');
+    if (customChallengeBtn) {
+        customChallengeBtn.addEventListener('click', () => {
+            const customGameInput = document.querySelector('.custom-game-input');
+            if (customGameInput) {
+                const gameId = customGameInput.value.trim();
+                if (gameId) {
+                    showFriendSelectorForGame(gameId);
+                } else {
+                    showToast('Enter game package ID', 'error');
+                }
+            }
         });
-    });
-    
-    // User name changes
-    document.getElementById('userName').addEventListener('change', (e) => {
-        appState.userName = e.target.value;
-        savePersistentState();
-        if (isFirebaseReady) {
-            syncWithFirebase();
-        }
-    });
-    
-    // Copy ID
-    document.getElementById('copyIdBtn').addEventListener('click', () => {
-        navigator.clipboard.writeText(appState.userId);
-        showToast('ID copied to clipboard', 'success');
-    });
-    
-    // Utility buttons
-    document.getElementById('clearCacheBtn').addEventListener('click', clearCache);
-    document.getElementById('settingsBtn').addEventListener('click', showSettings);
-}
-
-// =============================================
-// UTILITY FUNCTIONS
-// =============================================
-function generateUserId() {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let id = '';
-    for (let i = 0; i < 8; i++) {
-        id += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return id;
-}
-
-function formatTime(timestamp) {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-    
-    if (diff < 60000) return 'Just now';
-    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-    return date.toLocaleDateString();
-}
-
-function showAppContent() {
-    document.getElementById('loadingScreen').style.display = 'none';
-    document.getElementById('appContent').style.display = 'block';
-}
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    
-    container.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-function clearCache() {
-    if (confirm('Clear all cache and restart?')) {
-        localStorage.clear();
-        sessionStorage.clear();
-        if ('caches' in window) {
-            caches.keys().then(keys => {
-                keys.forEach(key => caches.delete(key));
-            });
-        }
-        location.reload();
     }
 }
 
 // =============================================
-// MODAL FUNCTIONS
+// GAME SESSIONS
 // =============================================
-function showFriendModal(friend) {
-    const modal = document.getElementById('friendModal');
-    const infoDiv = document.getElementById('selectedFriendInfo');
+async function startGameSession(gameType, friendId) {
+    const friend = appState.friends.find(f => f.id === friendId);
+    if (!friend) {
+        showToast('Friend not found', 'error');
+        return;
+    }
     
-    infoDiv.innerHTML = `
-        <div class="friend-modal-info">
-            <div class="friend-avatar-large">
-                <i class="fas fa-user-circle"></i>
-            </div>
-            <div>
-                <h4>${friend.name}</h4>
-                <p>ID: ${friend.id}</p>
-                <p>Status: <span class="status-${friend.status}">${friend.status}</span></p>
-                <p>Last seen: ${formatTime(friend.lastSeen)}</p>
-            </div>
-        </div>
-    `;
+    const gameInfo = GAMES_DB[gameType] || {
+        name: 'Custom Game',
+        packageId: gameType,
+        storeUrl: `https://play.google.com/store/apps/details?id=${gameType}`,
+        intentUrl: `intent://details?id=${gameType}#Intent;scheme=market;end`
+    };
     
-    modal.classList.add('active');
+    const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    
+    appState.activeSession = {
+        id: sessionId,
+        game: gameType,
+        gameInfo: gameInfo,
+        participants: [appState.userId, friendId],
+        timestamp: Date.now(),
+        status: 'active'
+    };
+    
+    // Save to Firebase
+    if (isFirebaseReady) {
+        await firebaseDatabase.ref('sessions/' + sessionId).set({
+            game: gameType,
+            gameInfo: gameInfo,
+            participants: [appState.userId, friendId],
+            createdBy: appState.userId,
+            createdAt: Date.now(),
+            status: 'active'
+        });
+    }
+    
+    // Save locally
+    savePersistentState();
+    
+    // Update UI
+    updateActiveSessionUI();
+    
+    // Send invite to friend
+    sendGameInvite(friend, gameInfo, sessionId);
+    
+    showToast(`Game session started with ${friend.name}`, 'success');
 }
 
-function showFriendSelectorForGame(gameType) {
-    // Implementation for friend selection modal
-    console.log('Select friend for game:', gameType);
+function endGameSession() {
+    if (!appState.activeSession) return;
+    
+    const sessionId = appState.activeSession.id;
+    
+    // Update Firebase
+    if (isFirebaseReady) {
+        firebaseDatabase.ref('sessions/' + sessionId).update({
+            status: 'ended',
+            endedAt: Date.now()
+        });
+    }
+    
+    appState.activeSession = null;
+    localStorage.removeItem('playSync_activeSession');
+    
+    // Update UI
+    const activeSessionCard = document.getElementById('activeSessionCard');
+    if (activeSessionCard) {
+        activeSessionCard.classList.add('hidden');
+    }
+    
+    showToast('Game session ended', 'info');
 }
 
-function showGameSelectorForFriend(friend) {
-    // Implementation for game selection modal
-    console.log('Select game for friend:', friend.name);
+// =============================================
+// GAME INVITES
+// =============================================
+async function sendGameInvite(friend, gameInfo, sessionId) {
+    if (!isFirebaseReady || !friend.firebaseId) return;
+    
+    const inviteId = 'inv_' + Date.now();
+    
+    const inviteData = {
+        from: appState.userId,
+        fromName: appState.userName,
+        game: gameInfo.name,
+        gamePackageId: gameInfo.packageId,
+        gameIntentUrl: gameInfo.intentUrl,
+        sessionId: sessionId,
+        timestamp: Date.now(),
+        status: 'pending'
+    };
+    
+    try {
+        await firebaseDatabase.ref(`invites/${friend.firebaseId}/${inviteId}`).set(inviteData);
+        
+        // Add notification
+        addNotification({
+            type: 'invite_sent',
+            message: `Invited ${friend.name} to play ${gameInfo.name}`,
+            timestamp: Date.now(),
+            data: { friendId: friend.id, game: gameInfo.name }
+        });
+        
+    } catch (error) {
+        console.error('Error sending invite:', error);
+        showToast('Failed to send invite', 'error');
+    }
+}
+
+function handleIncomingInvite(invite) {
+    // Find friend who sent the invite
+    const friend = appState.friends.find(f => f.id === invite.from);
+    if (!friend) {
+        // Add as friend if not already
+        addFriend(invite.from);
+    }
+    
+    // Add notification
+    addNotification({
+        type: 'invite_received',
+        message: `${invite.fromName} invited you to play ${invite.game}`,
+        timestamp: invite.timestamp,
+        data: invite,
+        unread: true
+    });
+    
+    // Auto-accept if app is in foreground
+    if (document.visibilityState === 'visible') {
+        showGameInviteModal(invite, friend);
+    }
 }
 
 function showGameInviteModal(invite, friend) {
     const modal = document.getElementById('gameInviteModal');
     const infoDiv = document.getElementById('inviteInfo');
+    
+    if (!modal || !infoDiv) return;
     
     infoDiv.innerHTML = `
         <div class="invite-info">
@@ -1093,6 +980,317 @@ function showGameInviteModal(invite, friend) {
     modal.dataset.friendId = friend?.id;
     
     modal.classList.add('active');
+    
+    // Setup accept/decline buttons
+    const acceptBtn = document.getElementById('acceptInviteBtn');
+    const declineBtn = document.getElementById('declineInviteBtn');
+    
+    if (acceptBtn) {
+        acceptBtn.onclick = () => acceptGameInvite(invite, friend);
+    }
+    
+    if (declineBtn) {
+        declineBtn.onclick = () => declineGameInvite(invite);
+    }
+}
+
+async function acceptGameInvite(invite, friend) {
+    if (!isFirebaseReady) return;
+    
+    try {
+        // Update invite status
+        await firebaseDatabase.ref(`invites/${firebaseAuth.currentUser.uid}/${invite.id}`).update({
+            status: 'accepted',
+            respondedAt: Date.now()
+        });
+        
+        // Join the session
+        appState.activeSession = {
+            id: invite.sessionId,
+            game: invite.game,
+            gameInfo: GAMES_DB[invite.game] || {
+                name: invite.game,
+                packageId: invite.gamePackageId,
+                intentUrl: invite.gameIntentUrl
+            },
+            participants: [invite.from, appState.userId],
+            timestamp: Date.now(),
+            status: 'active'
+        };
+        
+        // Save locally
+        savePersistentState();
+        
+        // Update UI
+        updateActiveSessionUI();
+        
+        // Add notification
+        addNotification({
+            type: 'invite_accepted',
+            message: `You accepted ${invite.fromName}'s invite to ${invite.game}`,
+            timestamp: Date.now()
+        });
+        
+        // Open the game
+        openAndroidGame(invite.gamePackageId, invite.gameIntentUrl);
+        
+        // Notify the inviter
+        sendGameSyncNotification(friend, 'accepted', invite.sessionId);
+        
+        showToast('Game accepted! Opening...', 'success');
+        
+        // Close modal
+        const modal = document.getElementById('gameInviteModal');
+        if (modal) modal.classList.remove('active');
+        
+    } catch (error) {
+        console.error('Error accepting invite:', error);
+        showToast('Failed to accept invite', 'error');
+    }
+}
+
+async function declineGameInvite(invite) {
+    if (!isFirebaseReady) return;
+    
+    try {
+        await firebaseDatabase.ref(`invites/${firebaseAuth.currentUser.uid}/${invite.id}`).update({
+            status: 'declined',
+            respondedAt: Date.now()
+        });
+        
+        addNotification({
+            type: 'invite_declined',
+            message: `You declined ${invite.fromName}'s invite to ${invite.game}`,
+            timestamp: Date.now()
+        });
+        
+        showToast('Invite declined', 'info');
+        
+        // Close modal
+        const modal = document.getElementById('gameInviteModal');
+        if (modal) modal.classList.remove('active');
+        
+    } catch (error) {
+        console.error('Error declining invite:', error);
+        const modal = document.getElementById('gameInviteModal');
+        if (modal) modal.classList.remove('active');
+    }
+}
+
+function openAndroidGame(packageId, intentUrl) {
+    // Try to open with intent:// URL
+    const intent = intentUrl || `intent://details?id=${packageId}#Intent;scheme=market;end`;
+    
+    // Open on this device
+    window.location.href = intent;
+    
+    // Send sync signal to friend
+    syncGameWithFriend(packageId);
+}
+
+function syncGameWithFriend(packageId) {
+    // This would ideally use Firebase Cloud Messaging to send a push notification
+    // For now, we'll update the session in Firebase
+    if (appState.activeSession && isFirebaseReady) {
+        firebaseDatabase.ref('sessions/' + appState.activeSession.id).update({
+            syncTime: Date.now(),
+            lastSyncBy: appState.userId
+        });
+    }
+}
+
+// =============================================
+// MESSAGING SYSTEM
+// =============================================
+async function sendMessage(friendId, message) {
+    const friend = appState.friends.find(f => f.id === friendId);
+    if (!friend || !friend.firebaseId) return;
+    
+    const messageId = 'msg_' + Date.now();
+    const messageData = {
+        from: appState.userId,
+        fromName: appState.userName,
+        to: friendId,
+        message: message,
+        timestamp: Date.now(),
+        type: 'text'
+    };
+    
+    try {
+        // Save to Firebase
+        await firebaseDatabase.ref(`messages/${friend.firebaseId}/${messageId}`).set(messageData);
+        
+        // Add to local chat
+        addChatMessage({
+            ...messageData,
+            direction: 'sent'
+        });
+        
+    } catch (error) {
+        console.error('Error sending message:', error);
+    }
+}
+
+function handleIncomingMessage(message) {
+    // Add to chat if from current friend
+    if (appState.currentFriend && appState.currentFriend.id === message.from) {
+        addChatMessage({
+            ...message,
+            direction: 'received'
+        });
+    }
+    
+    // Add notification
+    addNotification({
+        type: 'message',
+        message: `${message.fromName}: ${message.message}`,
+        timestamp: message.timestamp,
+        unread: true
+    });
+}
+
+function addChatMessage(message) {
+    const chatMessages = document.getElementById('chatMessages');
+    if (!chatMessages) return;
+    
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${message.direction}`;
+    messageElement.innerHTML = `
+        <div class="message-content">${message.message}</div>
+        <div class="message-time">${formatTime(message.timestamp)}</div>
+    `;
+    
+    chatMessages.appendChild(messageElement);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// =============================================
+// NOTIFICATIONS SYSTEM
+// =============================================
+function markNotificationAsRead(notificationId) {
+    const notification = appState.notifications.find(n => n.id === notificationId);
+    if (notification && notification.unread) {
+        notification.unread = false;
+        appState.unreadNotifications = Math.max(0, appState.unreadNotifications - 1);
+        updateNotificationsUI();
+        savePersistentState();
+    }
+}
+
+function clearAllNotifications() {
+    appState.notifications = [];
+    appState.unreadNotifications = 0;
+    updateNotificationsUI();
+    savePersistentState();
+    showToast('All notifications cleared', 'info');
+}
+
+// =============================================
+// UTILITY FUNCTIONS (CONTINUED)
+// =============================================
+function clearCache() {
+    if (confirm('Clear all cache and restart?')) {
+        localStorage.clear();
+        sessionStorage.clear();
+        if ('caches' in window) {
+            caches.keys().then(keys => {
+                keys.forEach(key => caches.delete(key));
+            });
+        }
+        location.reload();
+    }
+}
+
+function showSettings() {
+    console.log('App State:', appState);
+    console.log('Firebase Ready:', isFirebaseReady);
+    console.log('Online:', isOnline);
+    showToast('Debug info in console', 'info');
+}
+
+// Stub functions for UI
+function setCurrentFriend(friend) {
+    appState.currentFriend = friend;
+    // Clear chat messages and show conversation with this friend
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        chatMessages.innerHTML = '';
+        showToast(`Chatting with ${friend.name}`, 'info');
+    }
+}
+
+function showFriendSelectorForGame(gameType) {
+    // Implementation for friend selection modal
+    console.log('Select friend for game:', gameType);
+    showToast('Select a friend from your friends list', 'info');
+}
+
+function showGameSelectorForFriend(friend) {
+    // Implementation for game selection modal
+    console.log('Select game for friend:', friend.name);
+    showToast(`Select a game to invite ${friend.name}`, 'info');
+}
+
+function showFriendModal(friend) {
+    const modal = document.getElementById('friendModal');
+    const infoDiv = document.getElementById('selectedFriendInfo');
+    
+    if (!modal || !infoDiv) return;
+    
+    infoDiv.innerHTML = `
+        <div class="friend-modal-info">
+            <div class="friend-avatar-large">
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <div>
+                <h4>${friend.name}</h4>
+                <p>ID: ${friend.id}</p>
+                <p>Status: <span class="status-${friend.status}">${friend.status}</span></p>
+                <p>Last seen: ${formatTime(friend.lastSeen)}</p>
+            </div>
+        </div>
+    `;
+    
+    modal.classList.add('active');
+    
+    // Setup modal buttons
+    const inviteBtn = document.getElementById('inviteToGameBtn');
+    const messageBtn = document.getElementById('messageFriendBtn');
+    const removeBtn = document.getElementById('removeFriendBtn');
+    
+    if (inviteBtn) {
+        inviteBtn.onclick = () => {
+            showGameSelectorForFriend(friend);
+            modal.classList.remove('active');
+        };
+    }
+    
+    if (messageBtn) {
+        messageBtn.onclick = () => {
+            setCurrentFriend(friend);
+            modal.classList.remove('active');
+        };
+    }
+    
+    if (removeBtn) {
+        removeBtn.onclick = () => {
+            removeFriend(friend.id);
+            modal.classList.remove('active');
+        };
+    }
+}
+
+function removeFriend(friendId) {
+    appState.friends = appState.friends.filter(f => f.id !== friendId);
+    savePersistentState();
+    updateFriendsUI();
+    updateOnlineFriendsUI();
+    showToast('Friend removed', 'info');
+}
+
+function sendGameSyncNotification(friend, action, sessionId) {
+    // This would send a push notification to the friend
+    console.log(`Game sync ${action} sent to ${friend.name} for session ${sessionId}`);
 }
 
 // =============================================
@@ -1115,7 +1313,10 @@ function installPWA() {
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then((choiceResult) => {
             if (choiceResult.outcome === 'accepted') {
-                document.getElementById('installBtn').classList.add('hidden');
+                const installBtn = document.getElementById('installBtn');
+                if (installBtn) {
+                    installBtn.classList.add('hidden');
+                }
             }
             deferredPrompt = null;
         });
@@ -1150,13 +1351,3 @@ window.addEventListener('beforeunload', () => {
     // Save state
     savePersistentState();
 });
-
-// =============================================
-// DEBUG
-// =============================================
-function showSettings() {
-    console.log('App State:', appState);
-    console.log('Firebase Ready:', isFirebaseReady);
-    console.log('Online:', isOnline);
-    showToast('Debug info in console', 'info');
-}
