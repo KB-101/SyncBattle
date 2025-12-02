@@ -1,15 +1,34 @@
-// Clear cache on every load during development
-if (window.location.hostname !== 'localhost') {
-  sessionStorage.setItem('lastLoad', Date.now());
-  
-  // Clear service worker cache
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-      registrations.forEach(function(registration) {
-        registration.unregister();
-      });
+const APP_VERSION = '1.0.1';
+const BUILD_TIME = Date.now();
+
+console.log(`PlaySync Arena v${APP_VERSION} (${BUILD_TIME})`);
+
+// Auto-clear old service workers
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(registration) {
+                // Keep only if it's the current version
+                if (!registration.scope.includes(`v=${APP_VERSION}`)) {
+                    registration.unregister();
+                    console.log('Unregistered old service worker');
+                }
+            });
+        });
     });
-  }
+}
+
+// Clear old caches on load
+if ('caches' in window) {
+    caches.keys().then(function(cacheNames) {
+        cacheNames.forEach(function(cacheName) {
+            // Delete caches that don't match current version
+            if (!cacheName.includes(APP_VERSION)) {
+                caches.delete(cacheName);
+                console.log('Deleted old cache:', cacheName);
+            }
+        });
+    });
 }
 // Firebase Configuration
 const firebaseConfig = {
