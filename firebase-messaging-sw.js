@@ -9,13 +9,13 @@ importScripts('https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js')
 // Initialize Firebase App in service worker
 // Use the SAME config as your main app
 firebase.initializeApp({
-    apiKey: "AIzaSyDk4kQThV4Z-1HOGKcN48qy7XqKfB3N5dE",
-    authDomain: "playsync-demo.firebaseapp.com",
-    databaseURL: "https://playsync-demo-default-rtdb.firebaseio.com",
-    projectId: "playsync-demo",
-    storageBucket: "playsync-demo.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abcdef1234567890"
+  apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
+  authDomain: "playsync-arena.firebaseapp.com",
+  databaseURL: "https://playsync-arena-default-rtdb.firebaseio.com",
+  projectId: "playsync-arena",
+  storageBucket: "playsync-arena.firebasestorage.app",
+  messagingSenderId: "989668959512",
+  appId: "1:989668959512:web:016b68c8fb932f2e9d2a6d"
 });
 
 // Retrieve Firebase Messaging instance
