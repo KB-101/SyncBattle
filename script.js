@@ -6,13 +6,13 @@ const APP_NAME = 'PlaySync Arena';
 
 // Firebase Configuration - REPLACE WITH YOUR CONFIG
 const firebaseConfig = {
-    apiKey: "AIzaSyDk4kQThV4Z-1HOGKcN48qy7XqKfB3N5dE",
-    authDomain: "playsync-demo.firebaseapp.com",
-    databaseURL: "https://playsync-demo-default-rtdb.firebaseio.com",
-    projectId: "playsync-demo",
-    storageBucket: "playsync-demo.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abcdef1234567890"
+  apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
+  authDomain: "playsync-arena.firebaseapp.com",
+  databaseURL: "https://playsync-arena-default-rtdb.firebaseio.com",
+  projectId: "playsync-arena",
+  storageBucket: "playsync-arena.firebasestorage.app",
+  messagingSenderId: "989668959512",
+  appId: "1:989668959512:web:016b68c8fb932f2e9d2a6d"
 };
 
 // =============================================
@@ -664,7 +664,7 @@ async function initializePushNotifications() {
         if (!appState.vapidKey) {
             // You need to set this from Firebase Console
             // Project Settings → Cloud Messaging → Web configuration
-            appState.vapidKey = 'YOUR_VAPID_KEY_HERE'; // REPLACE THIS
+            appState.vapidKey = 'BPaubqAbWzCUw7oN6et9ksGkRZEaKZhCzGWXgU5HBVn5a2pKW0VlmWcu7uAGcd87YGloZ5cdNVUX7g6HOxf8llo'; // REPLACE THIS
             localStorage.setItem('playSync_vapidKey', appState.vapidKey);
         }
         
@@ -710,7 +710,7 @@ async function requestNotificationPermission() {
 async function registerMessagingServiceWorker() {
     try {
         // Register the messaging service worker
-        const registration = await navigator.serviceWorker.register('/SyncBattle/firebase-messaging-sw.js');
+        const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
         console.log('Messaging Service Worker registered:', registration);
         
         // Wait for service worker to be ready
