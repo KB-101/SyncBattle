@@ -7,15 +7,15 @@ const APP_VERSION = '2.0.1';
 
 // Core app files to cache
 const CORE_CACHE = [
-    '/SyncBattle/',
-    '/SyncBattle/index.html',
-    '/SyncBattle/style.css',
-    '/SyncBattle/script.js',
-    '/SyncBattle/manifest.json',
-    '/SyncBattle/firebase-messaging-sw.js',
-    '/SyncBattle/icons/icon-96.png',
-    '/SyncBattle/icons/icon-192.png',
-    '/SyncBattle/icons/icon-512.png'
+    './',
+    './index.html',
+    './style.css',
+    './script.js',
+    './manifest.json',
+    './firebase-messaging-sw.js',
+    './icons/icon-96.png',
+    './icons/icon-192.png',
+    './icons/icon-512.png'
 ];
 
 // External resources to cache
