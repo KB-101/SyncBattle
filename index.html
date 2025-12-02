@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PlaySync Arena - Play Android Games with Friends</title>
-    <meta name="description" content="Challenge friends to play Android games together">
+    <title>PlaySync Arena - Real-Time Mobile Gaming with Friends</title>
+    <meta name="description" content="Play Android games together in real-time with friends">
     
     <!-- Cache Control -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -19,7 +19,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase.js"></script>
     
     <!-- Styles -->
-    <link rel="stylesheet" href="style.css?v=1.0.1">
+    <link rel="stylesheet" href="style.css?v=2.0.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- PWA Manifest -->
@@ -28,44 +28,8 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="icons/icon-96.png">
     
-    <!-- Critical CSS -->
-    <style>
-        /* Critical loading styles */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a2e;
-            color: #f8f9fa;
-            min-height: 100vh;
-        }
-        #loadingScreen {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: #1a1a2e;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(255,255,255,0.1);
-            border-radius: 50%;
-            border-top: 4px solid #4361ee;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .loading-text {
-            color: #f8f9fa;
-            font-size: 1.2rem;
-        }
-    </style>
+    <!-- Firebase Messaging -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -74,13 +38,19 @@
         <div class="loading-text">Loading PlaySync Arena...</div>
     </div>
 
-    <!-- Main App Content (Hidden initially) -->
+    <!-- Main App Content -->
     <div id="appContent" style="display: none;">
         <div class="container">
             <!-- Header -->
             <header>
                 <h1><i class="fas fa-gamepad"></i> PlaySync Arena</h1>
-                <p class="tagline">Challenge friends to play Android games together</p>
+                <p class="tagline">Real-time gaming with friends</p>
+                <div class="header-actions">
+                    <button id="notificationToggle" class="icon-btn notification-bell">
+                        <i class="fas fa-bell"></i>
+                        <span id="notificationCount" class="notification-badge">0</span>
+                    </button>
+                </div>
             </header>
 
             <main>
@@ -90,143 +60,162 @@
                         <!-- User Profile Card -->
                         <div class="card user-profile">
                             <h2><i class="fas fa-user"></i> Your Profile</h2>
-                            <div class="form-group">
-                                <label for="userName">Your Name</label>
-                                <input type="text" id="userName" placeholder="Enter your name" maxlength="20">
-                            </div>
-                            <div class="form-group">
-                                <label>Your ID</label>
-                                <div class="id-display">
-                                    <span id="userIdDisplay">Generating...</span>
-                                    <button id="copyIdBtn" class="icon-btn" title="Copy ID">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
-                                    <button id="shareIdBtn" class="icon-btn" title="Share ID">
-                                        <i class="fas fa-share-alt"></i>
-                                    </button>
+                            <div class="user-info">
+                                <div class="avatar">
+                                    <i class="fas fa-user-circle"></i>
+                                </div>
+                                <div class="user-details">
+                                    <input type="text" id="userName" placeholder="Your name" maxlength="20">
+                                    <div class="id-display">
+                                        <span id="userIdDisplay">Loading...</span>
+                                        <button id="copyIdBtn" class="icon-btn" title="Copy ID">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                            <button id="newIdBtn" class="btn secondary">
-                                <i class="fas fa-redo"></i> Generate New ID
-                            </button>
-                            <div class="status-indicator">
+                            <div class="user-status">
                                 <span class="status-dot" id="statusDot"></span>
-                                <span id="statusText">Offline</span>
+                                <span id="statusText">Connecting...</span>
                             </div>
                         </div>
 
                         <!-- Friend Connection Card -->
                         <div class="card friend-connect">
-                            <h2><i class="fas fa-user-friends"></i> Connect Friend</h2>
-                            <div class="form-group">
-                                <label for="friendId">Friend's ID</label>
-                                <input type="text" id="friendId" placeholder="Enter friend's ID">
+                            <h2><i class="fas fa-user-friends"></i> Friends</h2>
+                            <div class="friend-search">
+                                <input type="text" id="friendId" placeholder="Enter friend ID or username">
                                 <button id="connectBtn" class="btn primary">
-                                    <i class="fas fa-plug"></i> Connect
+                                    <i class="fas fa-plus"></i> Add
                                 </button>
                             </div>
                             
-                            <div id="friendInfo" class="friend-info hidden">
-                                <h3>Connected Friend</h3>
-                                <div class="friend-details">
-                                    <div class="friend-name">
-                                        <i class="fas fa-user-circle"></i>
-                                        <span id="friendName">Friend Name</span>
-                                    </div>
-                                    <div class="friend-status">
-                                        <span class="status-dot" id="friendStatusDot"></span>
-                                        <span id="friendStatusText">Checking...</span>
-                                    </div>
-                                    <button id="disconnectBtn" class="btn danger small">
-                                        <i class="fas fa-times"></i> Disconnect
-                                    </button>
+                            <div id="friendsList" class="friends-list">
+                                <!-- Friends will be loaded here -->
+                                <div class="empty-friends">
+                                    <i class="fas fa-user-friends"></i>
+                                    <p>No friends yet. Add someone to play with!</p>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Messages Card -->
+                        <div class="card quick-messages">
+                            <h2><i class="fas fa-comment-alt"></i> Quick Chat</h2>
+                            <div id="chatMessages" class="chat-messages">
+                                <!-- Messages will appear here -->
+                            </div>
+                            <div class="message-input">
+                                <input type="text" id="messageInput" placeholder="Type a message...">
+                                <button id="sendMessageBtn" class="btn primary">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                            <div class="quick-actions">
+                                <button class="quick-msg" data-msg="Ready to play?">🎮 Ready?</button>
+                                <button class="quick-msg" data-msg="Your turn!">👆 Your turn!</button>
+                                <button class="quick-msg" data-msg="Good game!">👍 GG!</button>
+                                <button class="quick-msg" data-msg="Let's play again">🔄 Again?</button>
                             </div>
                         </div>
                     </div>
 
                     <!-- Right Panel -->
                     <div class="right-panel">
+                        <!-- Active Game Session -->
+                        <div id="activeSessionCard" class="card active-session hidden">
+                            <h2><i class="fas fa-play-circle"></i> Active Session</h2>
+                            <div id="sessionInfo" class="session-info">
+                                <!-- Game session info will appear here -->
+                            </div>
+                            <div class="session-actions">
+                                <button id="syncGameBtn" class="btn success">
+                                    <i class="fas fa-sync-alt"></i> Sync Now
+                                </button>
+                                <button id="endSessionBtn" class="btn danger">
+                                    <i class="fas fa-stop"></i> End Session
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Games Grid -->
                         <div class="card games-grid">
-                            <h2><i class="fas fa-gamepad"></i> Popular Android Games</h2>
-                            <p class="subtitle">Send challenge to play these games with your friend</p>
+                            <h2><i class="fas fa-gamepad"></i> Popular Games</h2>
+                            <p class="subtitle">Play these games with friends in real-time</p>
                             
                             <div class="games-container">
-                                <!-- Game 1: 8 Ball Pool -->
-                                <div class="game-card" data-game="pool" data-game-id="com.billiards.city.pool.nation.club">
+                                <!-- Game Cards -->
+                                <div class="game-card" data-game="pool">
                                     <div class="game-icon">
                                         <i class="fas fa-basketball-ball"></i>
                                     </div>
                                     <div class="game-info">
                                         <h3>8 Ball Pool</h3>
-                                        <p>Classic billiards game</p>
-                                        <div class="game-actions">
-                                            <button class="btn challenge-btn primary">
-                                                <i class="fas fa-bolt"></i> Challenge
-                                            </button>
+                                        <p>Real-time billiards</p>
+                                        <div class="game-stats">
+                                            <span><i class="fas fa-users"></i> Multiplayer</span>
                                         </div>
                                     </div>
+                                    <button class="game-action-btn" data-action="challenge">
+                                        <i class="fas fa-bolt"></i>
+                                    </button>
                                 </div>
 
-                                <!-- Game 2: Chess -->
-                                <div class="game-card" data-game="chess" data-game-id="com.chess">
+                                <div class="game-card" data-game="chess">
                                     <div class="game-icon">
                                         <i class="fas fa-chess"></i>
                                     </div>
                                     <div class="game-info">
                                         <h3>Chess</h3>
-                                        <p>Strategic board game</p>
-                                        <div class="game-actions">
-                                            <button class="btn challenge-btn primary">
-                                                <i class="fas fa-bolt"></i> Challenge
-                                            </button>
+                                        <p>Strategy game</p>
+                                        <div class="game-stats">
+                                            <span><i class="fas fa-clock"></i> Turn-based</span>
                                         </div>
                                     </div>
+                                    <button class="game-action-btn" data-action="challenge">
+                                        <i class="fas fa-bolt"></i>
+                                    </button>
                                 </div>
 
-                                <!-- Game 3: Ludo King -->
-                                <div class="game-card" data-game="ludo" data-game-id="com.ludo.king">
+                                <div class="game-card" data-game="ludo">
                                     <div class="game-icon">
                                         <i class="fas fa-dice"></i>
                                     </div>
                                     <div class="game-info">
                                         <h3>Ludo King</h3>
                                         <p>Classic board game</p>
-                                        <div class="game-actions">
-                                            <button class="btn challenge-btn primary">
-                                                <i class="fas fa-bolt"></i> Challenge
-                                            </button>
+                                        <div class="game-stats">
+                                            <span><i class="fas fa-users"></i> 2-4 Players</span>
                                         </div>
                                     </div>
+                                    <button class="game-action-btn" data-action="challenge">
+                                        <i class="fas fa-bolt"></i>
+                                    </button>
                                 </div>
 
-                                <!-- Game 4: Custom Game -->
-                                <div class="game-card custom-game">
+                                <div class="game-card" data-game="custom">
                                     <div class="game-icon">
                                         <i class="fas fa-plus"></i>
                                     </div>
                                     <div class="game-info">
                                         <h3>Custom Game</h3>
-                                        <p>Challenge to any Android game</p>
-                                        <div class="game-actions">
-                                            <input type="text" id="customGameId" placeholder="Game Package ID">
-                                            <button id="customChallengeBtn" class="btn primary">
-                                                <i class="fas fa-bolt"></i> Challenge
-                                            </button>
-                                        </div>
+                                        <p>Any Android game</p>
+                                        <input type="text" class="custom-game-input" placeholder="Package ID">
                                     </div>
+                                    <button class="game-action-btn" data-action="challenge-custom">
+                                        <i class="fas fa-bolt"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Notifications Panel -->
-                        <div class="card notifications-panel">
-                            <h2><i class="fas fa-bell"></i> Notifications</h2>
-                            <div id="notificationsList" class="notifications-list">
-                                <div class="empty-state">
-                                    <i class="fas fa-inbox"></i>
-                                    <p>No notifications yet</p>
+                        <!-- Online Friends -->
+                        <div class="card online-friends">
+                            <h2><i class="fas fa-wifi"></i> Online Now</h2>
+                            <div id="onlineFriendsList" class="online-list">
+                                <div class="empty-online">
+                                    <i class="fas fa-user-slash"></i>
+                                    <p>No friends online</p>
                                 </div>
                             </div>
                         </div>
@@ -239,95 +228,108 @@
                 <div class="footer-content">
                     <div class="footer-section">
                         <span id="connectionStatus" class="connection-status">
-                            <i class="fas fa-circle offline"></i> Connecting...
+                            <i class="fas fa-circle"></i> <span id="connectionText">Connecting...</span>
                         </span>
-                        <button id="debugBtn" class="btn small" style="margin-left: 10px;">
-                            <i class="fas fa-bug"></i> Debug
-                        </button>
+                        <span class="player-count">
+                            <i class="fas fa-users"></i> <span id="onlineCount">0</span> online
+                        </span>
                     </div>
                     <div class="footer-section">
-                        <span class="version">v1.0.1</span>
-                        <button id="installBtn" class="btn secondary small hidden">
-                            <i class="fas fa-download"></i> Install App
+                        <button id="settingsBtn" class="icon-btn">
+                            <i class="fas fa-cog"></i>
                         </button>
-                        <button id="clearCacheBtn" class="btn small warning">
-                            <i class="fas fa-trash"></i> Clear Cache
+                        <button id="clearCacheBtn" class="icon-btn">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button id="installBtn" class="btn secondary small hidden">
+                            <i class="fas fa-download"></i> Install
                         </button>
                     </div>
                 </div>
             </footer>
         </div>
+    </div>
 
-        <!-- Toast Container -->
-        <div id="toastContainer" class="toast-container"></div>
-
-        <!-- Share Modal -->
-        <div id="shareModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3><i class="fas fa-share-alt"></i> Share Your ID</h3>
-                    <button class="close-modal">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p>Share this link with your friend:</p>
-                    <div class="share-link">
-                        <input type="text" id="shareLink" readonly>
-                        <button id="copyLinkBtn" class="btn primary">
-                            <i class="fas fa-copy"></i> Copy
-                        </button>
-                    </div>
-                    <p class="share-note">When your friend opens this link, they will automatically be able to connect with you.</p>
-                </div>
+    <!-- Modals -->
+    <div id="friendModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-friends"></i> Friend Options</h3>
+                <button class="close-modal">&times;</button>
             </div>
-        </div>
-
-        <!-- Game Request Modal -->
-        <div id="gameRequestModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3><i class="fas fa-gamepad"></i> Game Challenge</h3>
-                    <button class="close-modal">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p id="requestMessage">Loading...</p>
-                    <div class="game-request-actions">
-                        <button id="acceptRequestBtn" class="btn success">
-                            <i class="fas fa-check"></i> Accept & Open Game
-                        </button>
-                        <button id="declineRequestBtn" class="btn danger">
-                            <i class="fas fa-times"></i> Decline
-                        </button>
-                    </div>
+            <div class="modal-body">
+                <div id="selectedFriendInfo"></div>
+                <div class="friend-actions">
+                    <button id="inviteToGameBtn" class="btn primary">
+                        <i class="fas fa-gamepad"></i> Invite to Game
+                    </button>
+                    <button id="messageFriendBtn" class="btn secondary">
+                        <i class="fas fa-comment"></i> Send Message
+                    </button>
+                    <button id="removeFriendBtn" class="btn danger">
+                        <i class="fas fa-user-times"></i> Remove Friend
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Firebase and App Initialization -->
+    <div id="gameInviteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-bolt"></i> Game Invite</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="inviteInfo"></div>
+                <div class="invite-actions">
+                    <button id="acceptInviteBtn" class="btn success">
+                        <i class="fas fa-check"></i> Accept & Play
+                    </button>
+                    <button id="declineInviteBtn" class="btn danger">
+                        <i class="fas fa-times"></i> Decline
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notificationsPanel" class="notifications-panel hidden">
+        <div class="panel-header">
+            <h3><i class="fas fa-bell"></i> Notifications</h3>
+            <button id="clearNotificationsBtn" class="btn small">Clear All</button>
+        </div>
+        <div id="notificationsList" class="notifications-list">
+            <!-- Notifications will appear here -->
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Main Scripts -->
+    <script src="script.js?v=2.0.0"></script>
+    <script src="push-notifications.js?v=2.0.0"></script>
+
+    <!-- Service Worker -->
     <script>
-        // Check Firebase loading
-        console.log('Firebase check:', typeof firebase !== 'undefined');
-        if (typeof firebase !== 'undefined') {
-            console.log('Firebase SDK version:', firebase.SDK_VERSION);
-        }
-    </script>
-    
-    <!-- Main App Script -->
-    <script src="script.js?v=1.0.1"></script>
-    
-    <!-- Service Worker Registration -->
-    <script>
-        // Register service worker with error handling
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('service-worker.js')
-                    .then(function(registration) {
-                        console.log('ServiceWorker registration successful:', registration.scope);
-                    })
-                    .catch(function(error) {
-                        console.log('ServiceWorker registration failed:', error);
-                    });
-            });
+            navigator.serviceWorker.register('service-worker.js')
+                .then(registration => {
+                    console.log('Service Worker registered:', registration);
+                    // Register for push notifications
+                    if ('PushManager' in window) {
+                        initializePushNotifications(registration);
+                    }
+                })
+                .catch(error => {
+                    console.log('Service Worker registration failed:', error);
+                });
+        }
+
+        function initializePushNotifications(registration) {
+            // This will be implemented in push-notifications.js
+            console.log('Push notifications available');
         }
     </script>
 </body>
