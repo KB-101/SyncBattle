@@ -1,19 +1,21 @@
-// Service Worker for PlaySync Arena
-// Version: 1.0.1
+// Enhanced Service Worker with push support
 
-const CACHE_NAME = 'playsync-v1.0.1';
-const APP_VERSION = '1.0.1';
+const CACHE_NAME = 'playsync-v2.0.0';
+const APP_VERSION = '2.0.0';
 
-// URLs to cache (with versioning to prevent stale cache)
+// Files to cache
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './script.js',
-  './manifest.json'
+  './push-notifications.js',
+  './manifest.json',
+  './icons/icon-96.png',
+  './icons/icon-192.png'
 ];
 
-// Install event - cache essential files
+// Install event
 self.addEventListener('install', event => {
   console.log('[Service Worker] Install v' + APP_VERSION);
   
@@ -30,7 +32,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activate event - clean up old caches
+// Activate event
 self.addEventListener('activate', event => {
   console.log('[Service Worker] Activate v' + APP_VERSION);
   
@@ -38,7 +40,6 @@ self.addEventListener('activate', event => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          // Delete old caches that don't match current version
           if (cacheName !== CACHE_NAME) {
             console.log('[Service Worker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
@@ -52,32 +53,29 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch event - network first, cache fallback strategy
+// Fetch event - Network first, cache fallback
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests and Firebase/API requests
-  if (event.request.method !== 'GET' || 
-      event.request.url.includes('firebase') ||
-      event.request.url.includes('googleapis')) {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') return;
+  
+  // Skip Firebase and external URLs
+  if (event.request.url.includes('firebase') ||
+      event.request.url.includes('googleapis') ||
+      event.request.url.includes('gstatic')) {
     return;
   }
   
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Check if valid response
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
-        }
-        
-        // Clone the response
-        const responseToCache = response.clone();
-        
         // Cache the response
-        caches.open(CACHE_NAME)
-          .then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-        
+        if (response.status === 200) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => {
+              cache.put(event.request, responseToCache);
+            });
+        }
         return response;
       })
       .catch(() => {
@@ -88,24 +86,81 @@ self.addEventListener('fetch', event => {
               return response;
             }
             
-            // If it's an HTML request and not in cache, return index.html
+            // Return index.html for HTML requests
             if (event.request.headers.get('accept').includes('text/html')) {
               return caches.match('./index.html');
             }
-            
-            // Otherwise return nothing
-            return new Response('Network error', {
-              status: 408,
-              headers: { 'Content-Type': 'text/plain' }
-            });
           });
       })
   );
 });
 
-// Message event for cache clearing
-self.addEventListener('message', event => {
-  if (event.data.action === 'skipWaiting') {
-    self.skipWaiting();
+// Push event
+self.addEventListener('push', event => {
+  console.log('[Service Worker] Push received:', event);
+  
+  let data = {};
+  if (event.data) {
+    data = event.data.json();
+  }
+  
+  const options = {
+    body: data.body || 'New notification',
+    icon: 'icons/icon-96.png',
+    badge: 'icons/icon-96.png',
+    tag: 'playsync-push',
+    data: data.data || {},
+    actions: [
+      {
+        action: 'open',
+        title: 'Open App'
+      },
+      {
+        action: 'dismiss',
+        title: 'Dismiss'
+      }
+    ]
+  };
+  
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'PlaySync Arena', options)
+  );
+});
+
+// Notification click event
+self.addEventListener('notificationclick', event => {
+  console.log('[Service Worker] Notification click:', event);
+  
+  event.notification.close();
+  
+  // Handle action buttons
+  if (event.action === 'open') {
+    event.waitUntil(
+      clients.matchAll({type: 'window'})
+        .then(clientList => {
+          for (const client of clientList) {
+            if (client.url.includes(self.registration.scope) && 'focus' in client) {
+              return client.focus();
+            }
+          }
+          if (clients.openWindow) {
+            return clients.openWindow('./');
+          }
+        })
+    );
   }
 });
+
+// Sync event for background sync
+self.addEventListener('sync', event => {
+  console.log('[Service Worker] Background sync:', event.tag);
+  
+  if (event.tag === 'sync-data') {
+    event.waitUntil(syncData());
+  }
+});
+
+async function syncData() {
+  // Implement background data sync
+  console.log('Syncing data in background...');
+}
