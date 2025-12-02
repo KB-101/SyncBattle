@@ -1860,7 +1860,43 @@ function updateNotificationsUI() {
         }
     }
 }
-
+// =============================================
+// CONNECTION UI FUNCTION (MISSING - ADD THIS)
+// =============================================
+function updateConnectionUI() {
+    // This function updates the connection status in the footer
+    const connectionStatus = document.getElementById('connectionStatus');
+    const connectionText = document.getElementById('connectionText');
+    
+    if (!connectionStatus || !connectionText) return;
+    
+    if (isOnline) {
+        // Update icon
+        const icon = connectionStatus.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-circle online';
+        }
+        connectionText.textContent = 'Online';
+    } else {
+        // Update icon
+        const icon = connectionStatus.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-circle offline';
+        }
+        connectionText.textContent = 'Offline';
+    }
+    
+    // Also update the status dot in user profile
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    
+    if (statusDot) {
+        statusDot.className = isOnline ? 'status-dot online' : 'status-dot';
+    }
+    if (statusText) {
+        statusText.textContent = isOnline ? 'Online' : 'Offline';
+    }
+}
 // =============================================
 // UTILITY FUNCTIONS
 // =============================================
