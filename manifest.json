@@ -1,7 +1,7 @@
 {
   "name": "PlaySync Arena",
   "short_name": "PlaySync",
-  "description": "Challenge friends to play Android games together",
+  "description": "Real-time gaming with friends",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#1a1a2e",
@@ -29,19 +29,24 @@
       "type": "image/png"
     }
   ],
+  "gcm_sender_id": "103953800507",
+  "permissions": [
+    "notifications",
+    "gcm"
+  ],
   "categories": ["games", "social", "entertainment"],
   "shortcuts": [
     {
-      "name": "Send Challenge",
-      "short_name": "Challenge",
-      "description": "Send game challenge to friend",
-      "url": "./?action=challenge"
+      "name": "New Game",
+      "short_name": "Play",
+      "description": "Start a new game with friends",
+      "url": "./?action=newgame"
     },
     {
-      "name": "Connect Friend",
-      "short_name": "Connect",
-      "description": "Connect with a friend",
-      "url": "./?action=connect"
+      "name": "Friends",
+      "short_name": "Friends",
+      "description": "View online friends",
+      "url": "./?action=friends"
     }
   ]
 }
