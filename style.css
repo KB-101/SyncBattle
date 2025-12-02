@@ -852,3 +852,124 @@ footer {
         text-align: center;
     }
 }
+
+/* Connection Status Styles */
+.connection-status .online {
+    color: #4ade80;
+}
+
+.connection-status .offline {
+    color: #f72585;
+}
+
+/* Status dot animation */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.status-dot.online {
+    animation: pulse 2s infinite;
+}
+
+/* Toast styles for different types */
+.toast.success {
+    border-left-color: #4ade80;
+}
+
+.toast.error {
+    border-left-color: #f72585;
+}
+
+.toast.warning {
+    border-left-color: #fbbf24;
+}
+
+.toast.info {
+    border-left-color: #4361ee;
+}
+
+/* Modal styles for friend and invite modals */
+.friend-modal-info, .invite-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.friend-avatar-large, .invite-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, var(--primary), var(--accent));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+}
+
+.friend-actions, .invite-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.friend-actions .btn, .invite-actions .btn {
+    flex: 1;
+}
+
+/* Chat message styles */
+.message {
+    margin-bottom: 10px;
+    padding: 10px 15px;
+    border-radius: 15px;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.message.sent {
+    background: var(--primary);
+    margin-left: auto;
+    border-bottom-right-radius: 5px;
+    text-align: right;
+}
+
+.message.received {
+    background: var(--dark);
+    margin-right: auto;
+    border-bottom-left-radius: 5px;
+}
+
+.message-content {
+    margin-bottom: 5px;
+}
+
+.message-time {
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+/* Empty states */
+.empty-friends, .empty-online, .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--gray);
+}
+
+.empty-friends i, .empty-online i, .empty-state i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .friend-actions, .invite-actions {
+        flex-direction: column;
+    }
+    
+    .message {
+        max-width: 90%;
+    }
+}
