@@ -1,81 +1,111 @@
-// service-worker.js - VERSIONED CACHING
+// Service Worker for PlaySync Arena
+// Version: 1.0.1
+
+const CACHE_NAME = 'playsync-v1.0.1';
 const APP_VERSION = '1.0.1';
-const CACHE_NAME = `playsync-${APP_VERSION}-${Date.now()}`;
+
+// URLs to cache (with versioning to prevent stale cache)
 const urlsToCache = [
   './',
-  './index.html?v=' + APP_VERSION,
-  './style.css?v=' + APP_VERSION,
-  './script.js?v=' + APP_VERSION,
-  './manifest.json?v=' + APP_VERSION,
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+  './index.html',
+  './style.css',
+  './script.js',
+  './manifest.json'
 ];
 
-// Install
-self.addEventListener('install', function(event) {
-  console.log('Service Worker installing for version', APP_VERSION);
+// Install event - cache essential files
+self.addEventListener('install', event => {
+  console.log('[Service Worker] Install v' + APP_VERSION);
   
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(function(cache) {
-        console.log('Caching app shell for version', APP_VERSION);
+      .then(cache => {
+        console.log('[Service Worker] Caching app shell');
         return cache.addAll(urlsToCache);
       })
-      .then(function() {
-        console.log('Skip waiting for version', APP_VERSION);
+      .then(() => {
+        console.log('[Service Worker] Skip waiting');
         return self.skipWaiting();
       })
   );
 });
 
-// Activate - Delete ALL old caches
-self.addEventListener('activate', function(event) {
-  console.log('Service Worker activating for version', APP_VERSION);
+// Activate event - clean up old caches
+self.addEventListener('activate', event => {
+  console.log('[Service Worker] Activate v' + APP_VERSION);
   
   event.waitUntil(
-    caches.keys().then(function(cacheNames) {
+    caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(function(cacheName) {
-          // Delete any cache that's not the current version
-          if (!cacheName.includes(APP_VERSION)) {
-            console.log('Deleting old cache:', cacheName);
+        cacheNames.map(cacheName => {
+          // Delete old caches that don't match current version
+          if (cacheName !== CACHE_NAME) {
+            console.log('[Service Worker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(function() {
-      console.log('Claiming clients for version', APP_VERSION);
+    }).then(() => {
+      console.log('[Service Worker] Claiming clients');
       return self.clients.claim();
     })
   );
 });
 
-// Fetch - Network first, cache fallback
-self.addEventListener('fetch', function(event) {
-  // Skip Firebase requests
-  if (event.request.url.includes('firebase') || 
+// Fetch event - network first, cache fallback strategy
+self.addEventListener('fetch', event => {
+  // Skip non-GET requests and Firebase/API requests
+  if (event.request.method !== 'GET' || 
+      event.request.url.includes('firebase') ||
       event.request.url.includes('googleapis')) {
     return;
   }
   
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') return;
-  
   event.respondWith(
     fetch(event.request)
-      .then(function(response) {
-        // Cache successful responses
-        if (response.status === 200) {
-          var responseToCache = response.clone();
-          caches.open(CACHE_NAME)
-            .then(function(cache) {
-              cache.put(event.request, responseToCache);
-            });
+      .then(response => {
+        // Check if valid response
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
         }
+        
+        // Clone the response
+        const responseToCache = response.clone();
+        
+        // Cache the response
+        caches.open(CACHE_NAME)
+          .then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+        
         return response;
       })
-      .catch(function() {
+      .catch(() => {
         // Network failed, try cache
-        return caches.match(event.request);
+        return caches.match(event.request)
+          .then(response => {
+            if (response) {
+              return response;
+            }
+            
+            // If it's an HTML request and not in cache, return index.html
+            if (event.request.headers.get('accept').includes('text/html')) {
+              return caches.match('./index.html');
+            }
+            
+            // Otherwise return nothing
+            return new Response('Network error', {
+              status: 408,
+              headers: { 'Content-Type': 'text/plain' }
+            });
+          });
       })
   );
+});
+
+// Message event for cache clearing
+self.addEventListener('message', event => {
+  if (event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
 });
