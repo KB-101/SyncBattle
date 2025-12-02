@@ -1,18 +1,18 @@
 // =============================================
 // APP CONFIGURATION
 // =============================================
-const APP_VERSION = '2.0.1';
+const APP_VERSION = '2.0.2';
 const APP_NAME = 'PlaySync Arena';
 
-// Firebase Configuration
+// Firebase Configuration - REPLACE WITH YOUR CONFIG
 const firebaseConfig = {
-  apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
-  authDomain: "playsync-arena.firebaseapp.com",
-  databaseURL: "https://playsync-arena-default-rtdb.firebaseio.com",
-  projectId: "playsync-arena",
-  storageBucket: "playsync-arena.firebasestorage.app",
-  messagingSenderId: "989668959512",
-  appId: "1:989668959512:web:016b68c8fb932f2e9d2a6d"
+    apiKey: "AIzaSyDk4kQThV4Z-1HOGKcN48qy7XqKfB3N5dE",
+    authDomain: "playsync-demo.firebaseapp.com",
+    databaseURL: "https://playsync-demo-default-rtdb.firebaseio.com",
+    projectId: "playsync-demo",
+    storageBucket: "playsync-demo.appspot.com",
+    messagingSenderId: "123456789012",
+    appId: "1:123456789012:web:abcdef1234567890"
 };
 
 // =============================================
@@ -35,7 +35,8 @@ const appState = {
     currentFriend: null,
     userFirebaseId: null,
     pushNotificationsEnabled: false,
-    vapidKey: null
+    vapidKey: null,
+    sessionId: null
 };
 
 // Games database
@@ -70,8 +71,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Show app content
         showAppContent();
         
-        // Load saved state
-        loadPersistentState();
+        // Initialize user identity with unique ID
+        initializeUserIdentity();
         
         // Initialize Firebase
         await initializeFirebase();
@@ -95,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             initializePushNotifications();
         }, 3000);
         
-        console.log('App initialized successfully');
+        console.log('App initialized successfully with unique ID:', appState.userId);
         
     } catch (error) {
         console.error('App initialization failed:', error);
@@ -105,17 +106,156 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // =============================================
-// PERSISTENT STATE MANAGEMENT
+// UNIQUE ID GENERATION FUNCTIONS (FIXED)
 // =============================================
-function loadPersistentState() {
-    console.log('Loading persistent state...');
+function generateUniqueUserId() {
+    // Generate a truly unique ID with multiple sources of randomness
+    const timestamp = Date.now().toString(36); // Base36 timestamp
     
-    // Load user data
-    appState.userId = localStorage.getItem('playSync_userId') || generateUserId();
-    appState.userName = localStorage.getItem('playSync_userName') || 'Player';
-    appState.vapidKey = localStorage.getItem('playSync_vapidKey');
+    // Use crypto.getRandomValues if available (more secure)
+    let randomStr;
+    if (window.crypto && window.crypto.getRandomValues) {
+        const array = new Uint8Array(8);
+        window.crypto.getRandomValues(array);
+        randomStr = Array.from(array, byte => byte.toString(36)).join('').substring(0, 8);
+    } else {
+        // Fallback to Math.random
+        randomStr = Math.random().toString(36).substring(2, 10);
+    }
     
-    // Load friends list
+    // Add user agent and screen info for more uniqueness
+    const userAgentHash = hashCode(navigator.userAgent).toString(36).substring(0, 4);
+    const screenHash = hashCode(`${screen.width}x${screen.height}`).toString(36).substring(0, 4);
+    
+    // Combine all parts
+    const uniqueId = `user_${timestamp}_${randomStr}_${userAgentHash}${screenHash}`;
+    
+    console.log('Generated unique user ID:', uniqueId);
+    return uniqueId;
+}
+
+function generateShortUserId() {
+    // For display purposes - shorter, readable ID
+    const adjectives = ['Cool', 'Fast', 'Smart', 'Quick', 'Brave', 'Wise', 'Bold', 'Sharp', 'Epic', 'Super'];
+    const nouns = ['Player', 'Gamer', 'Champ', 'Hero', 'Pro', 'Master', 'Ace', 'King', 'Ninja', 'Wizard'];
+    const randomNum = Math.floor(Math.random() * 10000);
+    
+    const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    
+    return `${adjective}${noun}${randomNum}`;
+}
+
+function generateSessionId() {
+    // Generate unique session ID
+    const timestamp = Date.now();
+    let random;
+    
+    if (window.crypto && window.crypto.getRandomValues) {
+        const array = new Uint32Array(1);
+        window.crypto.getRandomValues(array);
+        random = array[0].toString(36);
+    } else {
+        random = Math.random().toString(36).substring(2, 15);
+    }
+    
+    return `sess_${timestamp}_${random}`.substring(0, 30);
+}
+
+function generateInviteId() {
+    // Generate unique invite ID
+    const timestamp = Date.now().toString(36);
+    let random;
+    
+    if (window.crypto && window.crypto.getRandomValues) {
+        const array = new Uint8Array(4);
+        window.crypto.getRandomValues(array);
+        random = Array.from(array, byte => byte.toString(36)).join('');
+    } else {
+        random = Math.random().toString(36).substring(2, 8);
+    }
+    
+    return `inv_${timestamp}_${random}`;
+}
+
+function generateMessageId() {
+    // Generate unique message ID
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 9);
+    return `msg_${timestamp}_${random}`;
+}
+
+function generateNotificationId() {
+    // Generate unique notification ID
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 6);
+    return `notif_${timestamp}_${random}`;
+}
+
+function generatePushTokenId() {
+    // Generate unique push token ID
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 10);
+    return `token_${timestamp}_${random}`;
+}
+
+// Helper function to create hash codes
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+}
+
+// =============================================
+// USER IDENTITY MANAGEMENT
+// =============================================
+function initializeUserIdentity() {
+    console.log('Initializing user identity...');
+    
+    // Generate a unique session ID for this browser session
+    appState.sessionId = generateSessionId();
+    
+    // Load or create user ID
+    loadUserIdentity();
+    
+    // Ensure the ID is unique and valid
+    ensureUniqueUserId();
+    
+    console.log('User identity initialized:', {
+        userId: appState.userId,
+        userName: appState.userName,
+        sessionId: appState.sessionId
+    });
+}
+
+function loadUserIdentity() {
+    // Try to load existing user ID
+    let savedUserId = localStorage.getItem('playSync_userId');
+    let savedUserName = localStorage.getItem('playSync_userName');
+    
+    if (savedUserId) {
+        console.log('Found saved user ID:', savedUserId);
+        appState.userId = savedUserId;
+    } else {
+        // Generate new unique ID
+        appState.userId = generateUniqueUserId();
+        localStorage.setItem('playSync_userId', appState.userId);
+        console.log('Generated new unique user ID:', appState.userId);
+    }
+    
+    // Load or generate username
+    if (savedUserName) {
+        appState.userName = savedUserName;
+    } else {
+        appState.userName = generateShortUserId();
+        localStorage.setItem('playSync_userName', appState.userName);
+    }
+    
+    // Load other persistent data
     const savedFriends = localStorage.getItem('playSync_friends');
     if (savedFriends) {
         try {
@@ -125,7 +265,6 @@ function loadPersistentState() {
         }
     }
     
-    // Load notifications
     const savedNotifications = localStorage.getItem('playSync_notifications');
     if (savedNotifications) {
         try {
@@ -141,19 +280,89 @@ function loadPersistentState() {
     // Update UI
     document.getElementById('userIdDisplay').textContent = appState.userId;
     document.getElementById('userName').value = appState.userName;
-    
-    console.log('Persistent state loaded:', { 
-        userId: appState.userId, 
-        friends: appState.friends.length,
-        notifications: appState.notifications.length 
-    });
 }
 
+function ensureUniqueUserId() {
+    // Check if current ID is valid and unique
+    if (!isUserIdValid(appState.userId)) {
+        console.log('Current user ID is not valid, generating new one...');
+        const newId = generateUniqueUserId();
+        updateUserId(newId);
+        return newId;
+    }
+    
+    // Check if ID might be duplicate (too short or simple)
+    if (appState.userId.length < 15 || appState.userId.split('_').length < 3) {
+        console.log('User ID might not be unique enough, upgrading...');
+        const newId = generateUniqueUserId();
+        updateUserId(newId);
+        return newId;
+    }
+    
+    return appState.userId;
+}
+
+function isUserIdValid(userId) {
+    if (!userId || typeof userId !== 'string') return false;
+    if (userId.length < 8) return false;
+    if (userId === 'user_123' || userId === 'test' || userId === 'player') return false;
+    
+    // Check for common non-unique patterns
+    const invalidPatterns = [
+        /^user[0-9]+$/i,
+        /^player[0-9]+$/i,
+        /^guest[0-9]+$/i,
+        /^test.*$/i,
+        /^demo.*$/i,
+        /^temp.*$/i
+    ];
+    
+    for (const pattern of invalidPatterns) {
+        if (pattern.test(userId)) return false;
+    }
+    
+    return true;
+}
+
+function updateUserId(newUserId) {
+    console.log('Updating user ID:', appState.userId, '→', newUserId);
+    
+    const oldId = appState.userId;
+    appState.userId = newUserId;
+    
+    // Update localStorage
+    localStorage.setItem('playSync_userId', newUserId);
+    
+    // Update UI
+    document.getElementById('userIdDisplay').textContent = newUserId;
+    
+    // Update Firebase if connected
+    if (isFirebaseReady) {
+        updateUserInFirebase();
+    }
+    
+    // Update friends list to reference new ID
+    appState.friends.forEach(friend => {
+        // If friend has this user as reference, update it
+        if (friend.lastChatWith === oldId) {
+            friend.lastChatWith = newUserId;
+        }
+    });
+    
+    savePersistentState();
+    
+    return newUserId;
+}
+
+// =============================================
+// PERSISTENT STATE MANAGEMENT
+// =============================================
 function savePersistentState() {
     localStorage.setItem('playSync_userId', appState.userId);
     localStorage.setItem('playSync_userName', appState.userName);
     localStorage.setItem('playSync_friends', JSON.stringify(appState.friends));
     localStorage.setItem('playSync_notifications', JSON.stringify(appState.notifications));
+    
     if (appState.vapidKey) {
         localStorage.setItem('playSync_vapidKey', appState.vapidKey);
     }
@@ -184,39 +393,102 @@ function restorePreviousSession() {
 }
 
 // =============================================
-// UNIQUE ID GENERATION FUNCTIONS
+// ID MANAGEMENT FUNCTIONS
 // =============================================
-function generateUserId() {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let id = '';
-    for (let i = 0; i < 8; i++) {
-        id += chars.charAt(Math.floor(Math.random() * chars.length));
+async function generateNewUserId() {
+    if (!confirm('Generate a new unique ID?\n\n⚠️ This will:\n• Refresh your app\n• Disconnect from friends\n• Require re-adding friends\n\nContinue?')) {
+        return;
     }
-    return id;
+    
+    try {
+        showToast('Generating new unique ID...', 'info');
+        
+        // Generate completely new unique ID
+        const newUserId = generateUniqueUserId();
+        const newUserName = generateShortUserId();
+        
+        // Store old data for potential migration
+        const oldUserId = appState.userId;
+        const oldFriends = [...appState.friends];
+        
+        // Clear local data
+        localStorage.removeItem('playSync_userId');
+        localStorage.removeItem('playSync_friends');
+        localStorage.removeItem('playSync_activeSession');
+        localStorage.removeItem('playSync_notifications');
+        
+        // Set new user data
+        localStorage.setItem('playSync_userId', newUserId);
+        localStorage.setItem('playSync_userName', newUserName);
+        
+        // Update app state
+        appState.userId = newUserId;
+        appState.userName = newUserName;
+        appState.friends = [];
+        appState.notifications = [];
+        appState.unreadNotifications = 0;
+        appState.currentFriend = null;
+        appState.activeSession = null;
+        
+        // Update UI immediately
+        document.getElementById('userIdDisplay').textContent = newUserId;
+        document.getElementById('userName').value = newUserName;
+        updateFriendsUI();
+        updateNotificationsUI();
+        
+        // Show success message
+        showToast('✅ New unique ID generated!', 'success');
+        
+        // Add notification about the change
+        addNotification({
+            type: 'id_changed',
+            message: `Your ID changed from ${oldUserId.substring(0, 8)}... to ${newUserId.substring(0, 8)}...`,
+            timestamp: Date.now(),
+            data: { oldId: oldUserId, newId: newUserId }
+        });
+        
+        // Update Firebase if connected
+        if (isFirebaseReady) {
+            await updateUserInFirebase();
+        }
+        
+        console.log('New ID generated:', { oldId: oldUserId, newId: newUserId });
+        
+    } catch (error) {
+        console.error('Error generating new ID:', error);
+        showToast('❌ Error generating new ID', 'error');
+    }
 }
 
-function generateSessionId() {
-    return 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
-
-function generateInviteId() {
-    return 'inv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-}
-
-function generateMessageId() {
-    return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-}
-
-function generateNotificationId() {
-    return 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-}
-
-function generatePushTokenId() {
-    return 'token_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+function copyUserIdToClipboard() {
+    const userId = appState.userId;
+    
+    navigator.clipboard.writeText(userId).then(() => {
+        showToast('✅ User ID copied to clipboard!', 'success');
+        
+        // Visual feedback
+        const idDisplay = document.getElementById('userIdDisplay');
+        if (idDisplay) {
+            idDisplay.classList.add('copied');
+            setTimeout(() => idDisplay.classList.remove('copied'), 1000);
+        }
+    }).catch(err => {
+        console.error('Failed to copy ID:', err);
+        
+        // Fallback method
+        const textArea = document.createElement('textarea');
+        textArea.value = userId;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        showToast('✅ User ID copied!', 'success');
+    });
 }
 
 // =============================================
-// FIREBASE INITIALIZATION (FIXED VERSION)
+// FIREBASE INITIALIZATION
 // =============================================
 async function initializeFirebase() {
     console.log('Initializing Firebase...');
@@ -256,7 +528,7 @@ async function initializeFirebase() {
                 // Update user in database
                 updateUserInFirebase();
                 
-                showToast('Connected to PlaySync!', 'success');
+                showToast('✅ Connected to PlaySync!', 'success');
             } else {
                 console.log('No user signed in');
                 isFirebaseReady = false;
@@ -265,7 +537,7 @@ async function initializeFirebase() {
         
     } catch (error) {
         console.error('Firebase initialization failed:', error);
-        showToast('Firebase connection failed. Using offline mode.', 'warning');
+        showToast('⚠️ Firebase connection failed. Using offline mode.', 'warning');
         isFirebaseReady = false;
         updateConnectionStatus(false);
         throw error;
@@ -283,10 +555,12 @@ function updateUserInFirebase() {
         name: appState.userName,
         lastSeen: Date.now(),
         online: true,
+        sessionId: appState.sessionId,
         friends: appState.friends.map(f => f.id),
         deviceInfo: {
             platform: navigator.platform,
-            userAgent: navigator.userAgent.substring(0, 100)
+            userAgent: navigator.userAgent.substring(0, 100),
+            screen: `${screen.width}x${screen.height}`
         }
     };
     
@@ -322,7 +596,8 @@ function updateConnectionStatus(connected) {
         if (isFirebaseReady && appState.userFirebaseId) {
             firebaseDatabase.ref('status/' + appState.userFirebaseId).set({
                 online: true,
-                lastSeen: Date.now()
+                lastSeen: Date.now(),
+                sessionId: appState.sessionId
             });
         }
     } else {
@@ -336,7 +611,7 @@ function updateConnectionStatus(connected) {
         
         // Show toast if was previously online
         if (isFirebaseReady) {
-            showToast('You are offline', 'warning');
+            showToast('⚠️ You are offline', 'warning');
         }
     }
     
@@ -401,11 +676,11 @@ async function initializePushNotifications() {
         
         appState.pushNotificationsEnabled = true;
         console.log('Push notifications initialized successfully');
-        showToast('Push notifications enabled!', 'success');
+        showToast('✅ Push notifications enabled!', 'success');
         
     } catch (error) {
         console.error('Push notification initialization failed:', error);
-        showToast('Push notifications not available', 'warning');
+        showToast('⚠️ Push notifications not available', 'warning');
     }
 }
 
@@ -435,7 +710,7 @@ async function requestNotificationPermission() {
 async function registerMessagingServiceWorker() {
     try {
         // Register the messaging service worker
-        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        const registration = await navigator.serviceWorker.register('/SyncBattle/firebase-messaging-sw.js');
         console.log('Messaging Service Worker registered:', registration);
         
         // Wait for service worker to be ready
@@ -509,7 +784,8 @@ async function saveFCMTokenToFirebase(token) {
             platform: navigator.platform,
             userAgent: navigator.userAgent.substring(0, 100),
             timestamp: Date.now(),
-            appVersion: APP_VERSION
+            appVersion: APP_VERSION,
+            userId: appState.userId
         };
         
         await firebaseDatabase.ref(`pushTokens/${appState.userFirebaseId}`).set(tokenData);
@@ -589,7 +865,7 @@ function handleGameInvitePush(data) {
     // If app is in foreground, show local notification
     if (document.visibilityState === 'visible') {
         showLocalNotification(
-            'Game Invite',
+            '🎮 Game Invite',
             `${data.fromName} invited you to play ${data.gameName}`,
             { ...data, action: 'game_invite' }
         );
@@ -612,7 +888,7 @@ function handleMessagePush(data) {
     // If app is in foreground, show local notification
     if (document.visibilityState === 'visible') {
         showLocalNotification(
-            'New Message',
+            '💬 New Message',
             `${data.fromName}: ${data.message}`,
             { ...data, action: 'message' }
         );
@@ -632,7 +908,7 @@ function handleFriendRequestPush(data) {
     
     if (document.visibilityState === 'visible') {
         showLocalNotification(
-            'Friend Request',
+            '👥 Friend Request',
             `${data.fromName} wants to be friends`,
             { ...data, action: 'friend_request' }
         );
@@ -769,7 +1045,7 @@ async function sendPushNotificationToFriend(friendId, type, data) {
         switch (type) {
             case 'game_invite':
                 notificationData.notification = {
-                    title: 'Game Invite',
+                    title: '🎮 Game Invite',
                     body: `${appState.userName} invited you to play ${data.gameName}`,
                     icon: './icons/icon-192.png'
                 };
@@ -786,7 +1062,7 @@ async function sendPushNotificationToFriend(friendId, type, data) {
                 
             case 'message':
                 notificationData.notification = {
-                    title: 'New Message',
+                    title: '💬 New Message',
                     body: `${appState.userName}: ${data.message.substring(0, 50)}${data.message.length > 50 ? '...' : ''}`,
                     icon: './icons/icon-192.png'
                 };
@@ -802,7 +1078,7 @@ async function sendPushNotificationToFriend(friendId, type, data) {
                 
             case 'friend_request':
                 notificationData.notification = {
-                    title: 'Friend Request',
+                    title: '👥 Friend Request',
                     body: `${appState.userName} wants to be friends`,
                     icon: './icons/icon-192.png'
                 };
@@ -923,7 +1199,8 @@ async function addFriend(friendId) {
                 name: friendData.name || 'Friend',
                 firebaseId: firebaseId,
                 status: friendData.online ? 'online' : 'offline',
-                lastSeen: friendData.lastSeen || Date.now()
+                lastSeen: friendData.lastSeen || Date.now(),
+                addedAt: Date.now()
             };
             
             appState.friends.push(friend);
@@ -936,16 +1213,16 @@ async function addFriend(friendId) {
             // Send push notification to friend
             await sendPushNotificationToFriend(friendId, 'friend_request', {});
             
-            showToast(`Added ${friend.name} as friend`, 'success');
+            showToast(`✅ Added ${friend.name} as friend`, 'success');
             inputField.value = '';
             
         } else {
-            showToast('User not found. Make sure they are online.', 'error');
+            showToast('❌ User not found. Make sure they are online.', 'error');
         }
         
     } catch (error) {
         console.error('Error adding friend:', error);
-        showToast('Failed to add friend', 'error');
+        showToast('❌ Failed to add friend', 'error');
     }
 }
 
@@ -972,7 +1249,7 @@ function updateFriendStatus(friendId, userData) {
         
         // Show toast when friend comes online
         if (userData.online && friend.status !== 'online') {
-            showToast(`${friend.name} is now online`, 'info');
+            showToast(`✅ ${friend.name} is now online`, 'info');
         }
     }
 }
@@ -1045,7 +1322,7 @@ async function startGameSession(gameType, friendId) {
     // Send invite to friend with push notification
     sendGameInvite(friend, gameInfo, sessionId);
     
-    showToast(`Game session started with ${friend.name}`, 'success');
+    showToast(`🎮 Game session started with ${friend.name}`, 'success');
 }
 
 function updateActiveSession(sessionData) {
@@ -1146,7 +1423,7 @@ function handleIncomingInvite(invite) {
     } else {
         // Show browser notification
         showLocalNotification(
-            'Game Invite',
+            '🎮 Game Invite',
             `${friendName} invited you to play ${invite.game}`,
             { type: 'game_invite', ...invite }
         );
@@ -1234,11 +1511,11 @@ async function acceptGameInvite() {
         modal.classList.add('hidden');
         modal.classList.remove('active');
         
-        showToast('Game accepted! Opening...', 'success');
+        showToast('✅ Game accepted! Opening...', 'success');
         
     } catch (error) {
         console.error('Error accepting invite:', error);
-        showToast('Failed to accept invite', 'error');
+        showToast('❌ Failed to accept invite', 'error');
     }
 }
 
@@ -1350,7 +1627,7 @@ function handleIncomingMessage(message) {
     // Show browser notification
     if (document.visibilityState !== 'visible') {
         showLocalNotification(
-            'New Message',
+            '💬 New Message',
             `${message.fromName}: ${message.message}`,
             { type: 'message', ...message }
         );
@@ -1757,15 +2034,11 @@ function setupEventListeners() {
         }
     });
     
-    // Copy ID
-    document.getElementById('copyIdBtn').addEventListener('click', () => {
-        navigator.clipboard.writeText(appState.userId).then(() => {
-            showToast('ID copied to clipboard', 'success');
-        }).catch(err => {
-            console.error('Failed to copy:', err);
-            showToast('Failed to copy ID', 'error');
-        });
-    });
+    // Copy ID button
+    document.getElementById('copyIdBtn').addEventListener('click', copyUserIdToClipboard);
+    
+    // Generate new ID button
+    document.getElementById('newIdBtn').addEventListener('click', generateNewUserId);
     
     // Utility buttons
     document.getElementById('clearCacheBtn').addEventListener('click', clearCache);
@@ -1848,6 +2121,8 @@ function showSettings() {
     console.log('Firebase Ready:', isFirebaseReady);
     console.log('Online:', isOnline);
     console.log('User ID:', appState.userId);
+    console.log('User Name:', appState.userName);
+    console.log('Session ID:', appState.sessionId);
     console.log('Friends:', appState.friends.length);
     console.log('Active Session:', appState.activeSession);
     console.log('Notifications:', appState.notifications.length);
@@ -1889,12 +2164,12 @@ function installPWA() {
 // ONLINE/OFFLINE HANDLING
 // =============================================
 window.addEventListener('online', () => {
-    showToast('Back online', 'success');
+    showToast('✅ Back online', 'success');
     updateConnectionStatus(true);
 });
 
 window.addEventListener('offline', () => {
-    showToast('You are offline', 'warning');
+    showToast('⚠️ You are offline', 'warning');
     updateConnectionStatus(false);
 });
 
