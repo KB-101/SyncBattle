@@ -308,7 +308,7 @@ self.addEventListener('pushsubscriptionchange', function(event) {
     event.waitUntil(
         self.registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array('YOUR_VAPID_KEY_HERE') // Replace with your VAPID key
+            applicationServerKey: urlBase64ToUint8Array('BPaubqAbWzCUw7oN6et9ksGkRZEaKZhCzGWXgU5HBVn5a2pKW0VlmWcu7uAGcd87YGloZ5cdNVUX7g6HOxf8llo') 
         })
         .then(function(newSubscription) {
             console.log('[firebase-messaging-sw.js] New subscription:', newSubscription);
