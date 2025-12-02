@@ -15,11 +15,13 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     
-    <!-- Firebase v8 (All-in-one) -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase.js"></script>
+    <!-- Firebase v9+ Modular SDK (Optimized Imports) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
     
     <!-- Styles -->
-    <link rel="stylesheet" href="style.css?v=2.0.0">
+    <link rel="stylesheet" href="style.css?v=2.0.1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- PWA Manifest -->
@@ -27,9 +29,6 @@
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="icons/icon-96.png">
-    
-    <!-- Firebase Messaging -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -308,8 +307,7 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Main Scripts -->
-    <script src="script.js?v=2.0.0"></script>
-    <script src="push-notifications.js?v=2.0.0"></script>
+    <script src="script.js?v=2.0.1"></script>
 
     <!-- Service Worker -->
     <script>
@@ -317,19 +315,10 @@
             navigator.serviceWorker.register('service-worker.js')
                 .then(registration => {
                     console.log('Service Worker registered:', registration);
-                    // Register for push notifications
-                    if ('PushManager' in window) {
-                        initializePushNotifications(registration);
-                    }
                 })
                 .catch(error => {
                     console.log('Service Worker registration failed:', error);
                 });
-        }
-
-        function initializePushNotifications(registration) {
-            // This will be implemented in push-notifications.js
-            console.log('Push notifications available');
         }
     </script>
 </body>
