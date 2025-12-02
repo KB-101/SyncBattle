@@ -29,6 +29,10 @@
       "type": "image/png"
     }
   ],
+  "gcm_sender_id": "103953800507",
+  "permissions": [
+    "notifications"
+  ],
   "categories": ["games", "social", "entertainment"],
   "shortcuts": [
     {
