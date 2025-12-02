@@ -89,6 +89,16 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Update UI
         updateAllUI();
         
+        // Initialize push notifications after a delay
+        setTimeout(() => {
+            if (window.pushNotifications) {
+                window.pushNotifications.initialize().then(enabled => {
+                    appState.pushNotificationsEnabled = enabled;
+                    console.log('Push notifications enabled:', enabled);
+                });
+            }
+        }, 5000);
+        
         console.log('App initialized successfully');
         
     } catch (error) {
