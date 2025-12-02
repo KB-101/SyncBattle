@@ -162,7 +162,7 @@ async function handleSameOriginFetch(event) {
         
         // If HTML request and nothing in cache, return offline page or index.html
         if (event.request.headers.get('accept').includes('text/html')) {
-            return cache.match('/SyncBattle/index.html');
+            return cache.match('./index.html');
         }
         
         // Return a generic offline response
