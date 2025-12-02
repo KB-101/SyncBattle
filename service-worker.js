@@ -236,8 +236,8 @@ self.addEventListener('push', function(event) {
     
     const options = {
         body: data.body || 'New notification from PlaySync Arena',
-        icon: '/SyncBattle/icons/icon-192.png',
-        badge: '/SyncBattle/icons/icon-96.png',
+        icon: './icons/icon-192.png',
+        badge: './icons/icon-96.png',
         tag: 'playsync-push-' + Date.now(),
         data: data.data || {},
         actions: [
