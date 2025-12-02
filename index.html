@@ -15,10 +15,11 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     
-    <!-- Firebase v9+ Modular SDK (Optimized Imports) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <!-- Firebase v8 (Optimized Imports) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
     
     <!-- Styles -->
     <link rel="stylesheet" href="style.css?v=2.0.1">
@@ -34,7 +35,7 @@
     <!-- Loading Screen -->
     <div id="loadingScreen">
         <div class="spinner"></div>
-        <div class="loading-text">Loading PlaySync Arena...</div>
+        <div class="loading-text">Loading PlaySync Arena v2.0.1...</div>
     </div>
 
     <!-- Main App Content -->
@@ -47,7 +48,7 @@
                 <div class="header-actions">
                     <button id="notificationToggle" class="icon-btn notification-bell">
                         <i class="fas fa-bell"></i>
-                        <span id="notificationCount" class="notification-badge">0</span>
+                        <span id="notificationCount" class="notification-badge hidden">0</span>
                     </button>
                 </div>
             </header>
@@ -105,7 +106,7 @@
                                 <!-- Messages will appear here -->
                             </div>
                             <div class="message-input">
-                                <input type="text" id="messageInput" placeholder="Type a message...">
+                                <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage();">
                                 <button id="sendMessageBtn" class="btn primary">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
@@ -155,7 +156,7 @@
                                             <span><i class="fas fa-users"></i> Multiplayer</span>
                                         </div>
                                     </div>
-                                    <button class="game-action-btn" data-action="challenge">
+                                    <button class="game-action-btn challenge-btn" data-game="pool">
                                         <i class="fas fa-bolt"></i>
                                     </button>
                                 </div>
@@ -171,7 +172,7 @@
                                             <span><i class="fas fa-clock"></i> Turn-based</span>
                                         </div>
                                     </div>
-                                    <button class="game-action-btn" data-action="challenge">
+                                    <button class="game-action-btn challenge-btn" data-game="chess">
                                         <i class="fas fa-bolt"></i>
                                     </button>
                                 </div>
@@ -187,7 +188,7 @@
                                             <span><i class="fas fa-users"></i> 2-4 Players</span>
                                         </div>
                                     </div>
-                                    <button class="game-action-btn" data-action="challenge">
+                                    <button class="game-action-btn challenge-btn" data-game="ludo">
                                         <i class="fas fa-bolt"></i>
                                     </button>
                                 </div>
@@ -199,10 +200,10 @@
                                     <div class="game-info">
                                         <h3>Custom Game</h3>
                                         <p>Any Android game</p>
-                                        <input type="text" class="custom-game-input" placeholder="Package ID">
+                                        <input type="text" id="customGameId" class="custom-game-input" placeholder="Package ID (e.g., com.game.example)">
                                     </div>
-                                    <button class="game-action-btn" data-action="challenge-custom">
-                                        <i class="fas fa-bolt"></i>
+                                    <button id="customChallengeBtn" class="btn primary" style="margin-top: 10px;">
+                                        <i class="fas fa-bolt"></i> Challenge
                                     </button>
                                 </div>
                             </div>
@@ -227,7 +228,7 @@
                 <div class="footer-content">
                     <div class="footer-section">
                         <span id="connectionStatus" class="connection-status">
-                            <i class="fas fa-circle"></i> <span id="connectionText">Connecting...</span>
+                            <i class="fas fa-circle offline"></i> <span id="connectionText">Connecting...</span>
                         </span>
                         <span class="player-count">
                             <i class="fas fa-users"></i> <span id="onlineCount">0</span> online
@@ -250,7 +251,7 @@
     </div>
 
     <!-- Modals -->
-    <div id="friendModal" class="modal">
+    <div id="friendModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-user-friends"></i> Friend Options</h3>
@@ -273,7 +274,7 @@
         </div>
     </div>
 
-    <div id="gameInviteModal" class="modal">
+    <div id="gameInviteModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-bolt"></i> Game Invite</h3>
@@ -293,6 +294,21 @@
         </div>
     </div>
 
+    <div id="gameSelectorModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-gamepad"></i> Select Game</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Select a game to challenge <span id="selectedFriendName">Friend</span>:</p>
+                <div class="modal-games-list">
+                    <!-- Games will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="notificationsPanel" class="notifications-panel hidden">
         <div class="panel-header">
             <h3><i class="fas fa-bell"></i> Notifications</h3>
@@ -306,20 +322,35 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Main Scripts -->
+    <!-- Main Script -->
     <script src="script.js?v=2.0.1"></script>
-
-    <!-- Service Worker -->
+    
+    <!-- Service Worker Registration -->
     <script>
+        // Register service worker
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(registration => {
-                    console.log('Service Worker registered:', registration);
-                })
-                .catch(error => {
-                    console.log('Service Worker registration failed:', error);
-                });
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registered:', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
         }
+        
+        // Initialize push notifications after DOM loads
+        document.addEventListener('DOMContentLoaded', function() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                // Request permission on first load
+                setTimeout(() => {
+                    Notification.requestPermission().then(permission => {
+                        console.log('Notification permission:', permission);
+                    });
+                }, 3000);
+            }
+        });
     </script>
 </body>
 </html>
