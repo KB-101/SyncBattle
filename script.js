@@ -1,35 +1,10 @@
+// =============================================
+// APP VERSION & CONFIGURATION
+// =============================================
 const APP_VERSION = '1.0.1';
-const BUILD_TIME = Date.now();
+const APP_NAME = 'PlaySync Arena';
+console.log(`${APP_NAME} v${APP_VERSION} loading...`);
 
-console.log(`PlaySync Arena v${APP_VERSION} (${BUILD_TIME})`);
-
-// Auto-clear old service workers
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            registrations.forEach(function(registration) {
-                // Keep only if it's the current version
-                if (!registration.scope.includes(`v=${APP_VERSION}`)) {
-                    registration.unregister();
-                    console.log('Unregistered old service worker');
-                }
-            });
-        });
-    });
-}
-
-// Clear old caches on load
-if ('caches' in window) {
-    caches.keys().then(function(cacheNames) {
-        cacheNames.forEach(function(cacheName) {
-            // Delete caches that don't match current version
-            if (!cacheName.includes(APP_VERSION)) {
-                caches.delete(cacheName);
-                console.log('Deleted old cache:', cacheName);
-            }
-        });
-    });
-}
 // Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAlKamcGfK-kUupKFfH-rjiS54gZU_csf0",
@@ -41,25 +16,27 @@ const firebaseConfig = {
   appId: "1:989668959512:web:016b68c8fb932f2e9d2a6d"
 };
 
-// =============================================
-// GLOBAL VARIABLES
-// =============================================
-let app = null;
-let auth = null;
-let database = null;
-let isFirebaseReady = false;
 
-let appState = {
+// =============================================
+// GLOBAL STATE
+// =============================================
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDatabase = null;
+let isFirebaseReady = false;
+let isOnline = false;
+
+const appState = {
     currentUser: null,
     friend: null,
-    friendRef: null,
+    friendListener: null,
     notifications: [],
     sessionId: generateSessionId(),
-    isOnline: false
+    deferredPrompt: null
 };
 
 // Games database
-const gamesDatabase = {
+const GAMES_DB = {
     'pool': {
         name: '8 Ball Pool',
         packageId: 'com.billiards.city.pool.nation.club',
@@ -84,131 +61,107 @@ const gamesDatabase = {
 // INITIALIZATION
 // =============================================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM Content Loaded');
+    console.log('DOM loaded, initializing app...');
     initializeApp();
 });
 
-function initializeApp() {
-    console.log('Initializing app...');
-    
-    // Show loading screen
-    showLoadingScreen();
-    
-    // Initialize Firebase
-    initializeFirebase();
-    
-    // Initialize user (even if Firebase fails)
-    initializeUser();
-    
-    // Setup event listeners
-    setupEventListeners();
-    
-    // Check URL for friend ID
-    checkUrlForFriendId();
-    
-    // Setup PWA install
-    setupPWAInstall();
+async function initializeApp() {
+    try {
+        // Show app content immediately
+        showAppContent();
+        
+        // Initialize Firebase
+        await initializeFirebase();
+        
+        // Initialize user
+        await initializeUser();
+        
+        // Setup event listeners
+        setupEventListeners();
+        
+        // Check URL for friend ID
+        checkUrlForFriendId();
+        
+        // Setup PWA install
+        setupPWAInstall();
+        
+        console.log('App initialized successfully');
+        
+    } catch (error) {
+        console.error('App initialization failed:', error);
+        showToast('App initialization failed. Using offline mode.', 'error');
+        // Continue in offline mode
+        updateConnectionStatus(false);
+    }
 }
 
 // =============================================
 // FIREBASE INITIALIZATION
 // =============================================
-function initializeFirebase() {
+async function initializeFirebase() {
     console.log('Initializing Firebase...');
     
+    // Check if Firebase SDK is loaded
+    if (typeof firebase === 'undefined') {
+        console.error('Firebase SDK not loaded');
+        showToast('Firebase SDK not loaded. Using offline mode.', 'warning');
+        return;
+    }
+    
     try {
-        // Check if Firebase is loaded
-        if (typeof firebase === 'undefined') {
-            console.error('Firebase SDK not loaded');
-            showToast('Firebase SDK not loaded. Using offline mode.', 'warning');
-            hideLoadingScreen();
-            return;
-        }
-        
-        console.log('Firebase SDK version:', firebase.SDK_VERSION);
-        
         // Initialize Firebase app
-        if (!firebase.apps.length) {
-            app = firebase.initializeApp(firebaseConfig);
-            console.log('Firebase app initialized');
-        } else {
-            app = firebase.app();
-            console.log('Using existing Firebase app');
-        }
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+        console.log('Firebase app initialized');
         
         // Get auth and database instances
-        auth = firebase.auth();
-        database = firebase.database();
+        firebaseAuth = firebase.auth();
+        firebaseDatabase = firebase.database();
         
-        // Check if modules are available
-        if (!auth || !database) {
-            throw new Error('Firebase modules not loaded');
-        }
-        
-        console.log('Firebase auth and database loaded');
-        
-        // Sign in anonymously
-        auth.signInAnonymously().then(function(userCredential) {
-            console.log('Anonymous sign-in successful:', userCredential.user.uid);
-            
-            // Set up auth state listener
-            auth.onAuthStateChanged(function(user) {
-                if (user) {
-                    console.log('User authenticated:', user.uid);
-                    isFirebaseReady = true;
-                    appState.currentUser = {
-                        uid: user.uid,
-                        isAnonymous: user.isAnonymous
-                    };
-                    
-                    // Update user in database
-                    updateUserInFirebase();
-                    
-                    // Update connection status
-                    updateConnectionStatus(true);
-                    showToast('Connected to PlaySync!', 'success');
-                    
-                    // Setup Firebase listeners
-                    setupFirebaseListeners();
-                    
-                    // Hide loading screen
-                    hideLoadingScreen();
-                    
-                } else {
-                    console.log('No user signed in');
-                    isFirebaseReady = false;
-                    hideLoadingScreen();
-                }
-            });
-            
-        }).catch(function(error) {
-            console.error('Anonymous sign-in failed:', error);
-            showToast('Using offline mode', 'warning');
-            isFirebaseReady = false;
-            hideLoadingScreen();
-        });
-        
-        // Monitor connection status
-        const connectedRef = database.ref('.info/connected');
+        // Setup connection monitoring
+        const connectedRef = firebaseDatabase.ref('.info/connected');
         connectedRef.on('value', function(snapshot) {
             const connected = snapshot.val() === true;
-            console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
-            appState.isOnline = connected;
+            isOnline = connected;
             updateConnectionStatus(connected);
+            console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
+        });
+        
+        // Sign in anonymously
+        await firebaseAuth.signInAnonymously();
+        console.log('Anonymous sign-in successful');
+        
+        // Listen for auth state changes
+        firebaseAuth.onAuthStateChanged(function(user) {
+            if (user) {
+                console.log('User authenticated:', user.uid);
+                isFirebaseReady = true;
+                
+                // Update user in database
+                updateUserInFirebase();
+                
+                // Setup Firebase listeners
+                setupFirebaseListeners();
+                
+                showToast('Connected to PlaySync!', 'success');
+                
+            } else {
+                console.log('No user signed in');
+                isFirebaseReady = false;
+            }
         });
         
     } catch (error) {
         console.error('Firebase initialization error:', error);
-        showToast('Firebase failed. Using offline mode.', 'warning');
+        showToast('Firebase connection failed. Using offline mode.', 'warning');
         isFirebaseReady = false;
-        hideLoadingScreen();
+        updateConnectionStatus(false);
     }
 }
 
 // =============================================
 // USER MANAGEMENT
 // =============================================
-function initializeUser() {
+async function initializeUser() {
     console.log('Initializing user...');
     
     // Load or create user ID
@@ -222,8 +175,11 @@ function initializeUser() {
     }
     
     // Update UI immediately
-    document.getElementById('userIdDisplay').textContent = userId;
-    document.getElementById('userName').value = userName;
+    const idDisplay = document.getElementById('userIdDisplay');
+    const nameInput = document.getElementById('userName');
+    
+    if (idDisplay) idDisplay.textContent = userId;
+    if (nameInput) nameInput.value = userName;
     
     console.log('User initialized:', userId);
 }
@@ -241,8 +197,8 @@ function generateSessionId() {
     return 'sess_' + Math.random().toString(36).substr(2, 9);
 }
 
-function updateUserInFirebase() {
-    if (!isFirebaseReady || !auth.currentUser) {
+async function updateUserInFirebase() {
+    if (!isFirebaseReady || !firebaseAuth.currentUser) {
         console.log('Skipping Firebase update - not ready');
         return;
     }
@@ -259,91 +215,71 @@ function updateUserInFirebase() {
         updatedAt: Date.now()
     };
     
-    database.ref('users/' + auth.currentUser.uid).set(userData)
-        .then(function() {
-            console.log('User updated in Firebase');
-            
-            // Store in appState
-            appState.currentUser = {
-                uid: auth.currentUser.uid,
-                ...userData
-            };
-        })
-        .catch(function(error) {
-            console.error('Error updating user in Firebase:', error);
-        });
+    try {
+        await firebaseDatabase.ref('users/' + firebaseAuth.currentUser.uid).set(userData);
+        console.log('User updated in Firebase');
+        
+        // Store in appState
+        appState.currentUser = {
+            uid: firebaseAuth.currentUser.uid,
+            ...userData
+        };
+        
+    } catch (error) {
+        console.error('Error updating user in Firebase:', error);
+    }
 }
 
 // =============================================
-// EVENT LISTENERS
+// EVENT LISTENERS SETUP
 // =============================================
 function setupEventListeners() {
     console.log('Setting up event listeners...');
     
-    // Copy ID button
+    // User profile buttons
     document.getElementById('copyIdBtn').addEventListener('click', copyUserId);
-    
-    // Share ID button
     document.getElementById('shareIdBtn').addEventListener('click', showShareModal);
-    
-    // New ID button
     document.getElementById('newIdBtn').addEventListener('click', generateNewUserId);
     
-    // Connect button
+    // Friend connection buttons
     document.getElementById('connectBtn').addEventListener('click', connectToFriend);
-    
-    // Disconnect button
     document.getElementById('disconnectBtn').addEventListener('click', disconnectFromFriend);
     
     // Game challenge buttons
-    var challengeButtons = document.querySelectorAll('.challenge-btn');
-    challengeButtons.forEach(function(btn) {
+    document.querySelectorAll('.challenge-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
-            var gameCard = this.closest('.game-card');
-            var gameType = gameCard.dataset.game;
-            var gameId = gameCard.dataset.gameId;
+            const gameCard = this.closest('.game-card');
+            const gameType = gameCard.dataset.game;
+            const gameId = gameCard.dataset.gameId || gameType;
             sendGameChallenge(gameType, gameId);
         });
     });
     
-    // Custom challenge button
+    // Custom game button
     document.getElementById('customChallengeBtn').addEventListener('click', function() {
-        var customGameId = document.getElementById('customGameId').value.trim();
-        if (customGameId) {
-            sendGameChallenge('custom', customGameId);
+        const gameId = document.getElementById('customGameId').value.trim();
+        if (gameId) {
+            sendGameChallenge('custom', gameId);
         } else {
-            showToast("Please enter a game package ID", "error");
+            showToast('Please enter a game package ID', 'error');
         }
     });
     
-    // Install button
-    var installBtn = document.getElementById('installBtn');
-    if (installBtn) {
-        installBtn.addEventListener('click', installPWA);
-    }
-    
-    // Modal close buttons
-    var closeButtons = document.querySelectorAll('.close-modal');
-    closeButtons.forEach(function(btn) {
+    // Modal buttons
+    document.querySelectorAll('.close-modal').forEach(btn => {
         btn.addEventListener('click', function() {
-            var modals = document.querySelectorAll('.modal');
-            modals.forEach(function(modal) {
+            document.querySelectorAll('.modal').forEach(modal => {
                 modal.classList.remove('active');
             });
         });
     });
     
-    // Copy link button
-    var copyLinkBtn = document.getElementById('copyLinkBtn');
-    if (copyLinkBtn) {
-        copyLinkBtn.addEventListener('click', copyShareLink);
-    }
+    // Share modal buttons
+    document.getElementById('copyLinkBtn').addEventListener('click', copyShareLink);
     
     // Game request buttons
-    var acceptBtn = document.getElementById('acceptRequestBtn');
-    var declineBtn = document.getElementById('declineRequestBtn');
-    if (acceptBtn) acceptBtn.addEventListener('click', acceptGameRequest);
-    if (declineBtn) declineBtn.addEventListener('click', declineGameRequest);
+    document.getElementById('acceptRequestBtn').addEventListener('click', acceptGameRequest);
+    document.getElementById('declineRequestBtn').addEventListener('click', declineGameRequest);
     
     // User name change
     document.getElementById('userName').addEventListener('change', function(e) {
@@ -352,56 +288,15 @@ function setupEventListeners() {
             updateUserInFirebase();
         }
     });
-}
-// Clear cache button
-    document.getElementById('clearCacheBtn').addEventListener('click', function() {
-        if (confirm('Clear cache and reload app?')) {
-            clearAppCache();
-        }
-    });
-}
-
-// Cache clearing function
-function clearAppCache() {
-    console.log('Clearing app cache...');
     
-    // Show loading
-    showToast('Clearing cache...', 'info');
+    // Utility buttons
+    document.getElementById('debugBtn').addEventListener('click', showDebugInfo);
+    document.getElementById('clearCacheBtn').addEventListener('click', clearCache);
+    document.getElementById('installBtn').addEventListener('click', installPWA);
     
-    // Unregister service workers
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            registrations.forEach(function(registration) {
-                registration.unregister();
-                console.log('Unregistered service worker');
-            });
-        });
-    }
-    
-    // Clear all caches
-    if ('caches' in window) {
-        caches.keys().then(function(cacheNames) {
-            cacheNames.forEach(function(cacheName) {
-                caches.delete(cacheName);
-                console.log('Deleted cache:', cacheName);
-            });
-        });
-    }
-    
-    // Clear localStorage (keep user data)
-    const userId = localStorage.getItem('playSync_userId');
-    const userName = localStorage.getItem('playSync_userName');
-    localStorage.clear();
-    
-    // Restore user data
-    if (userId) localStorage.setItem('playSync_userId', userId);
-    if (userName) localStorage.setItem('playSync_userName', userName);
-    
-    // Reload with cache busting
-    setTimeout(function() {
-        showToast('Cache cleared! Reloading...', 'success');
-        window.location.href = window.location.href.split('?')[0] + '?v=' + APP_VERSION + '&t=' + Date.now();
-    }, 1000);
+    // Online/offline detection
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 }
 
 // =============================================
@@ -409,161 +304,154 @@ function clearAppCache() {
 // =============================================
 function setupFirebaseListeners() {
     if (!isFirebaseReady) {
-        console.log('Skipping Firebase listeners - not connected');
+        console.log('Skipping Firebase listeners - not ready');
         return;
     }
     
-    // Listen for friend status if connected
-    if (appState.friend) {
-        setupFriendListener();
-    }
-    
     // Listen for incoming game requests
-    if (auth.currentUser) {
-        database.ref('requests/' + auth.currentUser.uid)
+    if (firebaseAuth.currentUser) {
+        firebaseDatabase.ref('requests/' + firebaseAuth.currentUser.uid)
             .orderByChild('status')
             .equalTo('pending')
             .on('child_added', function(snapshot) {
-                var request = snapshot.val();
+                const request = snapshot.val();
                 request.id = snapshot.key;
                 showGameRequestModal(request);
             });
     }
 }
 
-function setupFriendListener() {
-    if (!isFirebaseReady || !appState.friend) return;
-    
-    if (appState.friendRef) {
-        appState.friendRef.off();
-    }
-    
-    appState.friendRef = database.ref('users/' + appState.friend.uid);
-    appState.friendRef.on('value', function(snapshot) {
-        if (snapshot.exists()) {
-            var friendData = snapshot.val();
-            updateFriendInfo(friendData);
-        } else {
-            clearFriendInfo();
-            showToast('Friend disconnected', 'info');
-        }
-    });
-}
-
 // =============================================
 // FRIEND CONNECTION
 // =============================================
-function connectToFriend() {
-    var friendPublicId = document.getElementById('friendId').value.trim();
+async function connectToFriend() {
+    const friendPublicId = document.getElementById('friendId').value.trim();
     
     if (!friendPublicId) {
-        showToast("Please enter a friend ID", "error");
+        showToast('Please enter a friend ID', 'error');
         return;
     }
     
     if (!isFirebaseReady) {
-        showToast("Cannot connect - Firebase not available", "error");
+        showToast('Cannot connect - Firebase not ready', 'error');
         return;
     }
     
     showToast('Searching for friend...', 'info');
     
-    // Search for friend by public ID
-    database.ref('users').once('value')
-        .then(function(snapshot) {
-            var friendUid = null;
-            var friendData = null;
-            
-            snapshot.forEach(function(childSnapshot) {
-                var userData = childSnapshot.val();
-                if (userData.publicId === friendPublicId) {
-                    friendUid = childSnapshot.key;
-                    friendData = userData;
-                    return true; // Stop iterating
-                }
-            });
-            
-            if (friendUid && friendData) {
-                // Store friend connection
-                appState.friend = {
-                    uid: friendUid,
-                    ...friendData
-                };
-                
-                // Setup listener for friend status
-                setupFriendListener();
-                
-                showToast('Connected to ' + friendData.name, 'success');
-                
-            } else {
-                showToast("Friend not found. Make sure they're online and have shared their ID.", "error");
+    try {
+        // Search for friend by public ID
+        const usersSnapshot = await firebaseDatabase.ref('users').once('value');
+        let friendUid = null;
+        let friendData = null;
+        
+        usersSnapshot.forEach(childSnapshot => {
+            const userData = childSnapshot.val();
+            if (userData.publicId === friendPublicId) {
+                friendUid = childSnapshot.key;
+                friendData = userData;
+                return true;
             }
-        })
-        .catch(function(error) {
-            console.error("Error connecting to friend:", error);
-            showToast("Error connecting to friend. Check your connection.", "error");
         });
+        
+        if (friendUid && friendData) {
+            // Store friend connection
+            appState.friend = {
+                uid: friendUid,
+                ...friendData
+            };
+            
+            // Setup listener for friend status
+            setupFriendListener();
+            
+            showToast(`Connected to ${friendData.name}`, 'success');
+            
+        } else {
+            showToast('Friend not found. Make sure they are online.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error connecting to friend:', error);
+        showToast('Error connecting to friend', 'error');
+    }
 }
 
-function disconnectFromFriend() {
-    if (appState.friendRef) {
-        appState.friendRef.off();
-        appState.friendRef = null;
+function setupFriendListener() {
+    if (!isFirebaseReady || !appState.friend) return;
+    
+    // Remove old listener if exists
+    if (appState.friendListener) {
+        appState.friendListener.off();
     }
     
-    appState.friend = null;
-    clearFriendInfo();
-    showToast("Disconnected from friend", "info");
+    // Setup new listener
+    appState.friendListener = firebaseDatabase.ref('users/' + appState.friend.uid);
+    appState.friendListener.on('value', function(snapshot) {
+        if (snapshot.exists()) {
+            const friendData = snapshot.val();
+            updateFriendInfo(friendData);
+        } else {
+            disconnectFromFriend();
+            showToast('Friend disconnected', 'info');
+        }
+    });
 }
 
 function updateFriendInfo(friendData) {
-    var friendInfoDiv = document.getElementById('friendInfo');
-    var friendNameSpan = document.getElementById('friendName');
-    var friendStatusText = document.getElementById('friendStatusText');
-    var friendStatusDot = document.getElementById('friendStatusDot');
+    const friendInfo = document.getElementById('friendInfo');
+    const friendName = document.getElementById('friendName');
+    const friendStatus = document.getElementById('friendStatusText');
+    const friendDot = document.getElementById('friendStatusDot');
     
-    if (friendInfoDiv && friendNameSpan && friendStatusText && friendStatusDot) {
-        friendInfoDiv.classList.remove('hidden');
-        friendNameSpan.textContent = friendData.name;
-        
-        var isOnline = friendData.status === 'online';
-        friendStatusText.textContent = isOnline ? 'Online' : 'Offline';
-        friendStatusDot.className = 'status-dot ' + (isOnline ? 'online' : 'offline');
-    }
+    if (!friendInfo || !friendName || !friendStatus || !friendDot) return;
+    
+    friendInfo.classList.remove('hidden');
+    friendName.textContent = friendData.name;
+    
+    const isOnline = friendData.status === 'online';
+    friendStatus.textContent = isOnline ? 'Online' : 'Offline';
+    friendDot.className = 'status-dot ' + (isOnline ? 'online' : 'offline');
 }
 
-function clearFriendInfo() {
-    var friendInfoDiv = document.getElementById('friendInfo');
-    if (friendInfoDiv) {
-        friendInfoDiv.classList.add('hidden');
+function disconnectFromFriend() {
+    if (appState.friendListener) {
+        appState.friendListener.off();
+        appState.friendListener = null;
     }
+    
+    appState.friend = null;
+    
+    const friendInfo = document.getElementById('friendInfo');
+    if (friendInfo) friendInfo.classList.add('hidden');
+    
     document.getElementById('friendId').value = '';
+    showToast('Disconnected from friend', 'info');
 }
 
 // =============================================
 // GAME CHALLENGES
 // =============================================
-function sendGameChallenge(gameType, gameId) {
+async function sendGameChallenge(gameType, gameId) {
     if (!appState.friend) {
-        showToast("Connect to a friend first", "error");
+        showToast('Connect to a friend first', 'error');
         return;
     }
     
     if (!isFirebaseReady) {
-        showToast("Cannot send challenge - offline mode", "error");
+        showToast('Cannot send challenge - offline mode', 'error');
         return;
     }
     
-    var gameInfo = gamesDatabase[gameType] || {
+    const gameInfo = GAMES_DB[gameType] || {
         name: 'Custom Game',
         packageId: gameId,
-        storeUrl: 'https://play.google.com/store/apps/details?id=' + gameId,
-        intentUrl: 'intent://details?id=' + gameId + '#Intent;scheme=market;end'
+        storeUrl: `https://play.google.com/store/apps/details?id=${gameId}`,
+        intentUrl: `intent://details?id=${gameId}#Intent;scheme=market;end`
     };
     
-    var requestId = 'req_' + Date.now();
-    var requestData = {
-        from: auth.currentUser.uid,
+    const requestId = 'req_' + Date.now();
+    const requestData = {
+        from: firebaseAuth.currentUser.uid,
         fromName: localStorage.getItem('playSync_userName') || 'Player',
         fromPublicId: localStorage.getItem('playSync_userId'),
         to: appState.friend.uid,
@@ -577,136 +465,194 @@ function sendGameChallenge(gameType, gameId) {
         sessionId: appState.sessionId
     };
     
-    database.ref('requests/' + appState.friend.uid + '/' + requestId).set(requestData)
-        .then(function() {
-            showToast('Challenge sent to ' + appState.friend.name, 'success');
-            addNotification({
-                type: 'sent',
-                message: 'You challenged ' + appState.friend.name + ' to ' + gameInfo.name,
-                timestamp: Date.now()
-            });
-        })
-        .catch(function(error) {
-            console.error("Error sending challenge:", error);
-            showToast("Failed to send challenge", "error");
+    try {
+        await firebaseDatabase.ref(`requests/${appState.friend.uid}/${requestId}`).set(requestData);
+        showToast(`Challenge sent to ${appState.friend.name}`, 'success');
+        
+        addNotification({
+            type: 'sent',
+            message: `You challenged ${appState.friend.name} to ${gameInfo.name}`,
+            timestamp: Date.now()
         });
-}
-
-// =============================================
-// UI FUNCTIONS
-// =============================================
-function updateConnectionStatus(connected) {
-    var statusElement = document.getElementById('connectionStatus');
-    var statusText = document.getElementById('statusText');
-    var statusDot = document.getElementById('statusDot');
-    
-    if (connected) {
-        if (statusElement) statusElement.innerHTML = '<i class="fas fa-circle online"></i> Online';
-        if (statusText) statusText.textContent = 'Online';
-        if (statusDot) statusDot.className = 'status-dot online';
-        appState.isOnline = true;
-    } else {
-        if (statusElement) statusElement.innerHTML = '<i class="fas fa-circle offline"></i> Offline';
-        if (statusText) statusText.textContent = 'Offline';
-        if (statusDot) statusDot.className = 'status-dot offline';
-        appState.isOnline = false;
+        
+    } catch (error) {
+        console.error('Error sending challenge:', error);
+        showToast('Failed to send challenge', 'error');
     }
 }
 
-function showToast(message, type) {
-    var container = document.getElementById('toastContainer');
+// =============================================
+// GAME REQUEST HANDLING
+// =============================================
+function showGameRequestModal(request) {
+    const modal = document.getElementById('gameRequestModal');
+    const message = document.getElementById('requestMessage');
+    
+    if (!modal || !message) return;
+    
+    message.innerHTML = `
+        <strong>${request.fromName}</strong> wants to play <strong>${request.gameName}</strong> with you!
+        <br><br>
+        <small>Game ID: ${request.gamePackageId}</small>
+    `;
+    
+    modal.dataset.requestId = request.id;
+    modal.dataset.gameInfo = JSON.stringify(request);
+    
+    modal.classList.add('active');
+    
+    // Auto-decline after 30 seconds
+    setTimeout(() => {
+        if (modal.classList.contains('active')) {
+            declineGameRequest();
+        }
+    }, 30000);
+}
+
+async function acceptGameRequest() {
+    const modal = document.getElementById('gameRequestModal');
+    if (!modal || !isFirebaseReady) return;
+    
+    const requestId = modal.dataset.requestId;
+    const gameInfo = JSON.parse(modal.dataset.gameInfo);
+    
+    try {
+        // Update request status
+        await firebaseDatabase.ref(`requests/${firebaseAuth.currentUser.uid}/${requestId}`).update({
+            status: 'accepted',
+            respondedAt: Date.now()
+        });
+        
+        // Add notification
+        addNotification({
+            type: 'accepted',
+            message: `You accepted ${gameInfo.fromName}'s challenge to ${gameInfo.gameName}`,
+            timestamp: Date.now()
+        });
+        
+        // Open the game
+        openAndroidGame(gameInfo);
+        
+        showToast('Challenge accepted! Opening game...', 'success');
+        modal.classList.remove('active');
+        
+    } catch (error) {
+        console.error('Error accepting request:', error);
+        showToast('Error accepting challenge', 'error');
+    }
+}
+
+async function declineGameRequest() {
+    const modal = document.getElementById('gameRequestModal');
+    if (!modal || !isFirebaseReady) return;
+    
+    const requestId = modal.dataset.requestId;
+    const gameInfo = JSON.parse(modal.dataset.gameInfo);
+    
+    try {
+        await firebaseDatabase.ref(`requests/${firebaseAuth.currentUser.uid}/${requestId}`).update({
+            status: 'declined',
+            respondedAt: Date.now()
+        });
+        
+        addNotification({
+            type: 'declined',
+            message: `You declined ${gameInfo.fromName}'s challenge to ${gameInfo.gameName}`,
+            timestamp: Date.now()
+        });
+        
+        showToast('Challenge declined', 'info');
+        modal.classList.remove('active');
+        
+    } catch (error) {
+        console.error('Error declining request:', error);
+        modal.classList.remove('active');
+    }
+}
+
+function openAndroidGame(gameInfo) {
+    // Try to open with intent:// URL (Android app)
+    const intentUrl = gameInfo.intentUrl || `intent://details?id=${gameInfo.gamePackageId}#Intent;scheme=market;end`;
+    
+    // Fallback to Play Store URL
+    const storeUrl = gameInfo.storeUrl || `https://play.google.com/store/apps/details?id=${gameInfo.gamePackageId}`;
+    
+    console.log('Opening game:', gameInfo.gameName);
+    
+    // Try intent first
+    window.location.href = intentUrl;
+    
+    // If intent fails, open Play Store after delay
+    setTimeout(() => {
+        window.open(storeUrl, '_blank');
+    }, 500);
+}
+
+// =============================================
+// UI UTILITIES
+// =============================================
+function showAppContent() {
+    const loadingScreen = document.getElementById('loadingScreen');
+    const appContent = document.getElementById('appContent');
+    
+    if (loadingScreen) loadingScreen.style.display = 'none';
+    if (appContent) appContent.style.display = 'block';
+}
+
+function updateConnectionStatus(connected) {
+    const statusElement = document.getElementById('connectionStatus');
+    const statusText = document.getElementById('statusText');
+    const statusDot = document.getElementById('statusDot');
+    
+    if (connected) {
+        if (statusElement) {
+            statusElement.innerHTML = '<i class="fas fa-circle online"></i> Online';
+            statusElement.classList.remove('offline');
+        }
+        if (statusText) statusText.textContent = 'Online';
+        if (statusDot) statusDot.className = 'status-dot online';
+        isOnline = true;
+    } else {
+        if (statusElement) {
+            statusElement.innerHTML = '<i class="fas fa-circle offline"></i> Offline';
+            statusElement.classList.add('offline');
+        }
+        if (statusText) statusText.textContent = 'Offline';
+        if (statusDot) statusDot.className = 'status-dot offline';
+        isOnline = false;
+    }
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
     if (!container) return;
     
-    var toast = document.createElement('div');
-    toast.className = 'toast ' + type;
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
     
-    var icon = 'info-circle';
-    if (type === 'success') icon = 'check-circle';
-    if (type === 'error') icon = 'exclamation-circle';
-    if (type === 'warning') icon = 'exclamation-triangle';
+    const icons = {
+        success: 'check-circle',
+        error: 'exclamation-circle',
+        warning: 'exclamation-triangle',
+        info: 'info-circle'
+    };
     
-    toast.innerHTML = '<i class="fas fa-' + icon + '"></i><span>' + message + '</span>';
+    toast.innerHTML = `
+        <i class="fas fa-${icons[type] || 'info-circle'}"></i>
+        <span>${message}</span>
+    `;
     
     container.appendChild(toast);
     
     // Remove after 5 seconds
-    setTimeout(function() {
+    setTimeout(() => {
         toast.style.opacity = '0';
-        setTimeout(function() {
+        setTimeout(() => {
             if (toast.parentNode === container) {
                 container.removeChild(toast);
             }
         }, 300);
     }, 5000);
-}
-
-function showLoadingScreen() {
-    // Already showing from HTML
-}
-
-function hideLoadingScreen() {
-    var loadingScreen = document.getElementById('loadingScreen');
-    var appContent = document.getElementById('appContent');
-    
-    if (loadingScreen) {
-        loadingScreen.style.display = 'none';
-    }
-    if (appContent) {
-        appContent.style.display = 'block';
-    }
-}
-
-// =============================================
-// UTILITY FUNCTIONS
-// =============================================
-function copyUserId() {
-    var userId = document.getElementById('userIdDisplay').textContent;
-    navigator.clipboard.writeText(userId).then(function() {
-        showToast("ID copied to clipboard", "success");
-    }).catch(function(err) {
-        console.error('Failed to copy: ', err);
-        showToast("Failed to copy ID", "error");
-    });
-}
-
-function showShareModal() {
-    var userId = localStorage.getItem('playSync_userId');
-    var shareLink = window.location.origin + window.location.pathname + '?friend=' + encodeURIComponent(userId);
-    
-    var shareLinkInput = document.getElementById('shareLink');
-    var shareModal = document.getElementById('shareModal');
-    
-    if (shareLinkInput && shareModal) {
-        shareLinkInput.value = shareLink;
-        shareModal.classList.add('active');
-    }
-}
-
-function copyShareLink() {
-    var shareLinkInput = document.getElementById('shareLink');
-    if (shareLinkInput) {
-        shareLinkInput.select();
-        navigator.clipboard.writeText(shareLinkInput.value).then(function() {
-            showToast("Link copied to clipboard", "success");
-        });
-    }
-}
-
-function generateNewUserId() {
-    var confirm = window.confirm("Generate a new user ID? This will disconnect you from current friend.");
-    
-    if (confirm) {
-        disconnectFromFriend();
-        
-        var newId = generateUserId();
-        localStorage.setItem('playSync_userId', newId);
-        document.getElementById('userIdDisplay').textContent = newId;
-        
-        if (isFirebaseReady) {
-            updateUserInFirebase();
-        }
-        showToast("New ID generated", "success");
-    }
 }
 
 function addNotification(notification) {
@@ -715,141 +661,159 @@ function addNotification(notification) {
 }
 
 function updateNotificationsUI() {
-    var container = document.getElementById('notificationsList');
+    const container = document.getElementById('notificationsList');
     if (!container) return;
     
     if (appState.notifications.length === 0) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>No notifications yet</p></div>';
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>No notifications yet</p>
+            </div>
+        `;
         return;
     }
     
-    var notificationsHTML = appState.notifications.map(function(notif) {
-        return '<div class="notification-item ' + notif.type + '"><div class="notification-content"><p>' + notif.message + '</p><small>' + new Date(notif.timestamp).toLocaleTimeString() + '</small></div></div>';
-    }).join('');
+    container.innerHTML = appState.notifications.map(notif => `
+        <div class="notification-item ${notif.type}">
+            <div class="notification-content">
+                <p>${notif.message}</p>
+                <small>${new Date(notif.timestamp).toLocaleTimeString()}</small>
+            </div>
+        </div>
+    `).join('');
+}
+
+// =============================================
+// UTILITY FUNCTIONS
+// =============================================
+function copyUserId() {
+    const userId = document.getElementById('userIdDisplay').textContent;
+    navigator.clipboard.writeText(userId)
+        .then(() => showToast('ID copied to clipboard', 'success'))
+        .catch(err => {
+            console.error('Failed to copy:', err);
+            showToast('Failed to copy ID', 'error');
+        });
+}
+
+function showShareModal() {
+    const userId = localStorage.getItem('playSync_userId');
+    const shareLink = `${window.location.origin}${window.location.pathname}?friend=${encodeURIComponent(userId)}`;
     
-    container.innerHTML = notificationsHTML;
+    const shareInput = document.getElementById('shareLink');
+    const modal = document.getElementById('shareModal');
+    
+    if (shareInput && modal) {
+        shareInput.value = shareLink;
+        modal.classList.add('active');
+    }
+}
+
+function copyShareLink() {
+    const shareInput = document.getElementById('shareLink');
+    if (shareInput) {
+        shareInput.select();
+        navigator.clipboard.writeText(shareInput.value)
+            .then(() => showToast('Link copied to clipboard', 'success'));
+    }
+}
+
+async function generateNewUserId() {
+    if (!confirm('Generate a new user ID? This will disconnect you from your current friend.')) {
+        return;
+    }
+    
+    disconnectFromFriend();
+    
+    const newId = generateUserId();
+    localStorage.setItem('playSync_userId', newId);
+    
+    const idDisplay = document.getElementById('userIdDisplay');
+    if (idDisplay) idDisplay.textContent = newId;
+    
+    if (isFirebaseReady) {
+        await updateUserInFirebase();
+    }
+    
+    showToast('New ID generated', 'success');
 }
 
 function checkUrlForFriendId() {
-    var urlParams = new URLSearchParams(window.location.search);
-    var friendId = urlParams.get('friend');
+    const urlParams = new URLSearchParams(window.location.search);
+    const friendId = urlParams.get('friend');
     
     if (friendId) {
         document.getElementById('friendId').value = friendId;
-        showToast("Friend ID loaded from URL. Click Connect to proceed.", "info");
+        showToast('Friend ID loaded from URL. Click Connect to proceed.', 'info');
     }
 }
 
 // =============================================
-// GAME REQUEST MODAL
+// CACHE MANAGEMENT
 // =============================================
-function showGameRequestModal(request) {
-    var modal = document.getElementById('gameRequestModal');
-    var message = document.getElementById('requestMessage');
-    
-    if (!modal || !message) return;
-    
-    message.innerHTML = '<strong>' + request.fromName + '</strong> wants to play <strong>' + request.gameName + '</strong> with you!<br><br><small>Game ID: ' + request.gamePackageId + '</small>';
-    
-    modal.dataset.requestId = request.id;
-    modal.dataset.senderUid = request.from;
-    modal.dataset.gameInfo = JSON.stringify(request);
-    
-    modal.classList.add('active');
-    
-    // Auto-decline after 30 seconds
-    setTimeout(function() {
-        if (modal.classList.contains('active')) {
-            declineGameRequest();
+async function clearCache() {
+    if (confirm('Clear all cache and restart app? This will log you out.')) {
+        try {
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            // Clear caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                console.log('Caches cleared:', cacheNames.length);
+            }
+            
+            // Unregister service workers
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(reg => reg.unregister()));
+                console.log('Service workers unregistered:', registrations.length);
+            }
+            
+            showToast('Cache cleared. Reloading...', 'success');
+            
+            // Force reload without cache
+            setTimeout(() => {
+                window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Error clearing cache:', error);
+            showToast('Error clearing cache', 'error');
         }
-    }, 30000);
+    }
 }
 
-function acceptGameRequest() {
-    var modal = document.getElementById('gameRequestModal');
-    if (!modal || !isFirebaseReady) return;
+// =============================================
+// DEBUG FUNCTIONS
+// =============================================
+function showDebugInfo() {
+    console.log('=== DEBUG INFO ===');
+    console.log('App Version:', APP_VERSION);
+    console.log('Firebase Ready:', isFirebaseReady);
+    console.log('Online:', isOnline);
+    console.log('Current User:', appState.currentUser);
+    console.log('Friend:', appState.friend);
+    console.log('Firebase Auth:', firebaseAuth?.currentUser);
+    console.log('LocalStorage User ID:', localStorage.getItem('playSync_userId'));
+    console.log('==================');
     
-    var requestId = modal.dataset.requestId;
-    var gameInfo = JSON.parse(modal.dataset.gameInfo);
-    
-    // Update request status
-    database.ref('requests/' + auth.currentUser.uid + '/' + requestId).update({
-        status: 'accepted',
-        respondedAt: Date.now()
-    })
-    .then(function() {
-        // Add notification
-        addNotification({
-            type: 'accepted',
-            message: 'You accepted ' + gameInfo.fromName + "'s challenge to " + gameInfo.gameName,
-            timestamp: Date.now()
-        });
-        
-        // Open the game
-        openAndroidGame(gameInfo);
-        
-        showToast("Challenge accepted! Opening game...", "success");
-        modal.classList.remove('active');
-    })
-    .catch(function(error) {
-        console.error("Error accepting request:", error);
-        showToast("Error accepting challenge", "error");
-    });
-}
-
-function declineGameRequest() {
-    var modal = document.getElementById('gameRequestModal');
-    if (!modal || !isFirebaseReady) return;
-    
-    var requestId = modal.dataset.requestId;
-    var gameInfo = JSON.parse(modal.dataset.gameInfo);
-    
-    database.ref('requests/' + auth.currentUser.uid + '/' + requestId).update({
-        status: 'declined',
-        respondedAt: Date.now()
-    })
-    .then(function() {
-        addNotification({
-            type: 'declined',
-            message: 'You declined ' + gameInfo.fromName + "'s challenge to " + gameInfo.gameName,
-            timestamp: Date.now()
-        });
-        
-        showToast("Challenge declined", "info");
-        modal.classList.remove('active');
-    })
-    .catch(function(error) {
-        console.error("Error declining request:", error);
-        modal.classList.remove('active');
-    });
-}
-
-function openAndroidGame(gameInfo) {
-    // Try to open with intent:// URL (Android app)
-    var intentUrl = gameInfo.intentUrl || 'intent://details?id=' + gameInfo.gamePackageId + '#Intent;scheme=market;end';
-    
-    // Fallback to Play Store URL
-    var storeUrl = gameInfo.storeUrl || 'https://play.google.com/store/apps/details?id=' + gameInfo.gamePackageId;
-    
-    console.log("Opening game:", gameInfo.gameName, "URL:", intentUrl);
-    
-    // Try intent first, then fallback to Play Store
-    window.location.href = intentUrl;
-    
-    // If intent fails, open Play Store after a delay
-    setTimeout(function() {
-        window.open(storeUrl, '_blank');
-    }, 500);
+    showToast('Debug info logged to console', 'info');
 }
 
 // =============================================
 // PWA INSTALLATION
 // =============================================
 function setupPWAInstall() {
-    window.addEventListener('beforeinstallprompt', function(e) {
+    window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         appState.deferredPrompt = e;
-        var installBtn = document.getElementById('installBtn');
+        const installBtn = document.getElementById('installBtn');
         if (installBtn) {
             installBtn.classList.remove('hidden');
         }
@@ -859,9 +823,9 @@ function setupPWAInstall() {
 function installPWA() {
     if (appState.deferredPrompt) {
         appState.deferredPrompt.prompt();
-        appState.deferredPrompt.userChoice.then(function(choiceResult) {
+        appState.deferredPrompt.userChoice.then((choiceResult) => {
             if (choiceResult.outcome === 'accepted') {
-                var installBtn = document.getElementById('installBtn');
+                const installBtn = document.getElementById('installBtn');
                 if (installBtn) {
                     installBtn.classList.add('hidden');
                 }
@@ -872,74 +836,46 @@ function installPWA() {
 }
 
 // =============================================
-// SERVICE WORKER
+// ONLINE/OFFLINE HANDLING
 // =============================================
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('service-worker.js')
-            .then(function(registration) {
-                console.log('ServiceWorker registered:', registration.scope);
-            })
-            .catch(function(error) {
-                console.log('ServiceWorker registration failed:', error);
-            });
-    });
+function handleOnline() {
+    showToast('Back online', 'success');
+    updateConnectionStatus(true);
+}
+
+function handleOffline() {
+    showToast('You are offline', 'warning');
+    updateConnectionStatus(false);
 }
 
 // =============================================
 // CLEANUP ON EXIT
 // =============================================
-window.addEventListener('beforeunload', function() {
-    if (isFirebaseReady && auth.currentUser) {
-        database.ref('users/' + auth.currentUser.uid).update({
+window.addEventListener('beforeunload', () => {
+    if (isFirebaseReady && firebaseAuth.currentUser) {
+        firebaseDatabase.ref('users/' + firebaseAuth.currentUser.uid).update({
             status: 'offline',
             lastSeen: Date.now()
         });
     }
     
-    if (appState.friendRef) {
-        appState.friendRef.off();
+    if (appState.friendListener) {
+        appState.friendListener.off();
     }
 });
 
-// Handle online/offline events
-window.addEventListener('online', function() {
-    showToast("Back online", "success");
-    updateConnectionStatus(true);
-});
-
-window.addEventListener('offline', function() {
-    showToast("You're offline", "warning");
-    updateConnectionStatus(false);
-});
-
 // =============================================
-// DEBUG FUNCTIONS
+// TEST FIREBASE CONNECTION
 // =============================================
-function testFirebaseConnection() {
-    console.log('=== FIREBASE CONNECTION TEST ===');
-    console.log('Firebase SDK loaded:', typeof firebase !== 'undefined');
-    console.log('Firebase app:', app);
-    console.log('Auth:', auth);
-    console.log('Database:', database);
-    console.log('Current user:', auth ? auth.currentUser : null);
-    console.log('Firebase initialized:', isFirebaseReady);
-    console.log('==============================');
-    
-    // Test database write
-    if (auth && auth.currentUser) {
-        database.ref('test').set({
-            test: 'Firebase is working!',
+setTimeout(() => {
+    if (isFirebaseReady && firebaseAuth.currentUser) {
+        firebaseDatabase.ref('test/' + Date.now()).set({
+            test: 'Firebase connection working',
             timestamp: Date.now()
-        }).then(function() {
-            console.log('Firebase write successful!');
-            showToast('Firebase connection test: PASSED', 'success');
-        }).catch(function(error) {
-            console.error('Firebase write failed:', error);
-            showToast('Firebase connection test: FAILED', 'error');
+        }).then(() => {
+            console.log('Firebase test write successful');
+        }).catch(error => {
+            console.error('Firebase test write failed:', error);
         });
     }
-}
-
-// Run connection test after 3 seconds
-setTimeout(testFirebaseConnection, 3000);
+}, 5000);
