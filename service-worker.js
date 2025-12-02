@@ -1,36 +1,81 @@
-// service-worker.js - FIXED VERSION
-const CACHE_NAME = 'playsync-' + Date.now(); // Unique cache name each time
+// service-worker.js - VERSIONED CACHING
+const APP_VERSION = '1.0.1';
+const CACHE_NAME = `playsync-${APP_VERSION}-${Date.now()}`;
 const urlsToCache = [
-  '/SyncBattle/',
-  '/SyncBattle/index.html',
-  '/SyncBattle/style.css',
-  '/SyncBattle/script.js',
-  '/SyncBattle/manifest.json',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://img.icons8.com/color/96/000000/game-controller.png'
+  './',
+  './index.html?v=' + APP_VERSION,
+  './style.css?v=' + APP_VERSION,
+  './script.js?v=' + APP_VERSION,
+  './manifest.json?v=' + APP_VERSION,
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
-// service-worker.js - SIMPLE VERSION (disable caching)
-self.addEventListener('install', function(e) {
-  console.log('Service Worker: Installed');
-  self.skipWaiting();
+
+// Install
+self.addEventListener('install', function(event) {
+  console.log('Service Worker installing for version', APP_VERSION);
+  
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(function(cache) {
+        console.log('Caching app shell for version', APP_VERSION);
+        return cache.addAll(urlsToCache);
+      })
+      .then(function() {
+        console.log('Skip waiting for version', APP_VERSION);
+        return self.skipWaiting();
+      })
+  );
 });
 
-self.addEventListener('activate', function(e) {
-  console.log('Service Worker: Activated');
-  e.waitUntil(
+// Activate - Delete ALL old caches
+self.addEventListener('activate', function(event) {
+  console.log('Service Worker activating for version', APP_VERSION);
+  
+  event.waitUntil(
     caches.keys().then(function(cacheNames) {
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          return caches.delete(cacheName);
+          // Delete any cache that's not the current version
+          if (!cacheName.includes(APP_VERSION)) {
+            console.log('Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
         })
       );
     }).then(function() {
+      console.log('Claiming clients for version', APP_VERSION);
       return self.clients.claim();
     })
   );
 });
 
-self.addEventListener('fetch', function(e) {
-  // Don't cache anything - always fetch from network
-  e.respondWith(fetch(e.request));
+// Fetch - Network first, cache fallback
+self.addEventListener('fetch', function(event) {
+  // Skip Firebase requests
+  if (event.request.url.includes('firebase') || 
+      event.request.url.includes('googleapis')) {
+    return;
+  }
+  
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') return;
+  
+  event.respondWith(
+    fetch(event.request)
+      .then(function(response) {
+        // Cache successful responses
+        if (response.status === 200) {
+          var responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then(function(cache) {
+              cache.put(event.request, responseToCache);
+            });
+        }
+        return response;
+      })
+      .catch(function() {
+        // Network failed, try cache
+        return caches.match(event.request);
+      })
+  );
 });
