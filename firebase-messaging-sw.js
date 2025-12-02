@@ -33,8 +33,8 @@ messaging.setBackgroundMessageHandler(function(payload) {
     // Create notification options
     const notificationOptions = {
         body: notificationBody,
-        icon: '/SyncBattle/icons/icon-192.png',  // Absolute path for service worker
-        badge: '/SyncBattle/icons/icon-96.png',
+        icon: './icons/icon-192.png',  // Absolute path for service worker
+        badge: './icons/icon-96.png',
         data: notificationData,
         tag: 'playsync-bg-notification-' + Date.now(),
         requireInteraction: notificationData.important || false,
@@ -214,8 +214,8 @@ self.addEventListener('message', function(event) {
         case 'TEST_NOTIFICATION':
             self.registration.showNotification('Test Notification', {
                 body: 'This is a test notification from the service worker',
-                icon: '/SyncBattle/icons/icon-192.png',
-                badge: '/SyncBattle/icons/icon-96.png',
+                icon: './icons/icon-192.png',
+                badge: './icons/icon-96.png',
                 tag: 'test-notification-' + Date.now(),
                 actions: [
                     { action: 'open', title: 'Open' },
