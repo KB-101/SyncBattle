@@ -24,7 +24,7 @@ async function initializePushNotifications() {
         messaging = firebase.messaging();
         
         // Get VAPID key from Firebase
-        vapidKey = 'YOUR_VAPID_KEY_HERE'; // Get from Firebase Console
+        vapidKey = 'BPaubqAbWzCUw7oN6et9ksGkRZEaKZhCzGWXgU5HBVn5a2pKW0VlmWcu7uAGcd87YGloZ5cdNVUX7g6HOxf8llo'; // Get from Firebase Console
         
         // Request permission and get token
         try {
