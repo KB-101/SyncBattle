@@ -1,20 +1,15 @@
-// Version control - change this to force cache refresh
-const APP_VERSION = '1.0.1-' + Date.now();
-console.log('App version:', APP_VERSION);
-
-// Clear old caches on app start
-if ('serviceWorker' in navigator && 'caches' in window) {
-  window.addEventListener('load', function() {
-    // Clear any old caches
-    caches.keys().then(function(cacheNames) {
-      cacheNames.forEach(function(cacheName) {
-        if (!cacheName.includes(Date.now().toString().slice(0, 8))) {
-          caches.delete(cacheName);
-          console.log('Deleted old cache:', cacheName);
-        }
+// Clear cache on every load during development
+if (window.location.hostname !== 'localhost') {
+  sessionStorage.setItem('lastLoad', Date.now());
+  
+  // Clear service worker cache
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      registrations.forEach(function(registration) {
+        registration.unregister();
       });
     });
-  });
+  }
 }
 // Firebase Configuration
 const firebaseConfig = {
