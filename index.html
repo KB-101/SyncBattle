@@ -329,30 +329,66 @@
     
     <!-- Service Worker Registration -->
     <script>
-        // Register service worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('service-worker.js')
-                    .then(function(registration) {
-                        console.log('ServiceWorker registered:', registration.scope);
-                    })
-                    .catch(function(error) {
-                        console.log('ServiceWorker registration failed:', error);
+       <script>
+    // Register service workers
+    if ('serviceWorker' in navigator) {
+        // Wait for page to load
+        window.addEventListener('load', async function() {
+            try {
+                // Register main service worker
+                const mainRegistration = await navigator.serviceWorker.register('service-worker.js');
+                console.log('Main Service Worker registered:', mainRegistration.scope);
+                
+                // Register Firebase messaging service worker
+                const messagingRegistration = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+                console.log('Messaging Service Worker registered:', messagingRegistration.scope);
+                
+                // Wait for service workers to be ready
+                await navigator.serviceWorker.ready;
+                console.log('Service Workers ready');
+                
+                // Test communication with service workers
+                if (mainRegistration.active) {
+                    mainRegistration.active.postMessage({
+                        type: 'TEST_SERVICE_WORKER'
                     });
-            });
-        }
-        
-        // Initialize push notifications after DOM loads
-        document.addEventListener('DOMContentLoaded', function() {
-            if ('Notification' in window && Notification.permission === 'default') {
-                // Request permission on first load
-                setTimeout(() => {
-                    Notification.requestPermission().then(permission => {
-                        console.log('Notification permission:', permission);
-                    });
-                }, 3000);
+                }
+                
+                // Listen for messages from service workers
+                navigator.serviceWorker.addEventListener('message', event => {
+                    console.log('Message from Service Worker:', event.data);
+                    
+                    if (event.data.type === 'notification_opened') {
+                        // Handle notification data from service worker
+                        console.log('Notification opened with data:', event.data.data);
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Service Worker registration failed:', error);
             }
         });
+        
+        // Handle service worker updates
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+                refreshing = true;
+                window.location.reload();
+            }
+        });
+    }
+    
+    // Initialize push notifications after page loads
+    window.addEventListener('load', function() {
+        setTimeout(() => {
+            if ('Notification' in window && Notification.permission === 'default') {
+                // You can prompt for permission here if needed
+                console.log('Notification permission available');
+            }
+        }, 3000);
+    });
+</script>
     </script>
 </body>
 </html>
