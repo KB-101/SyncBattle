@@ -7,20 +7,22 @@
     <meta name="description" content="Challenge friends to play Android games together">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <!-- Add cache control -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <!-- Firebase v8 - Single bundle that includes everything -->
+    <!-- Firebase v8 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase.js"></script>
     
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
+    <!-- ADD VERSION NUMBERS TO ALL LOCAL FILES -->
+    <link rel="stylesheet" href="style.css?v=1.0.1">
+    <link rel="manifest" href="manifest.json?v=1.0.1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" type="image/x-icon" href="https://img.icons8.com/color/96/000000/game-controller.png">
     
     <style>
-        /* Loading screen */
         #loadingScreen {
             position: fixed;
             top: 0;
@@ -53,7 +55,7 @@
     <!-- Loading screen -->
     <div id="loadingScreen">
         <div class="spinner"></div>
-        <p style="color: white;">Loading PlaySync Arena...</p>
+        <p style="color: white;">Loading PlaySync Arena v1.0.1...</p>
     </div>
 
     <!-- Main app (hidden until loaded) -->
@@ -281,27 +283,30 @@
 
     <!-- Test Firebase loading -->
     <script>
-        console.log('Testing Firebase loading...');
+        console.log('PlaySync Arena v1.0.1 loading...');
+        
+        // Auto-clear old caches
+        if ('caches' in window) {
+            caches.keys().then(function(cacheNames) {
+                cacheNames.forEach(function(cacheName) {
+                    if (cacheName.includes('playsync')) {
+                        caches.delete(cacheName);
+                        console.log('Cleared old cache:', cacheName);
+                    }
+                });
+            });
+        }
         
         // Check if Firebase loaded
         setTimeout(function() {
-            console.log('Firebase loaded:', typeof firebase !== 'undefined');
             if (typeof firebase !== 'undefined') {
-                console.log('Firebase SDK version:', firebase.SDK_VERSION);
-                console.log('Firebase.auth available:', typeof firebase.auth === 'function');
-                console.log('Firebase.database available:', typeof firebase.database === 'function');
-                
-                // Show app if Firebase loaded
-                if (firebase.auth && firebase.database) {
-                    document.getElementById('loadingScreen').style.display = 'none';
-                    document.getElementById('appContent').style.display = 'block';
-                    console.log('Firebase loaded successfully!');
-                }
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('appContent').style.display = 'block';
             }
         }, 1000);
     </script>
     
-    <!-- Main app script -->
-    <script src="script.js"></script>
+    <!-- ADD VERSION TO SCRIPT FILE -->
+    <script src="script.js?v=1.0.1"></script>
 </body>
 </html>
