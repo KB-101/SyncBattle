@@ -33,7 +33,8 @@ const appState = {
     notifications: [],
     unreadNotifications: 0,
     currentFriend: null,
-    userFirebaseId: null
+    userFirebaseId: null,
+    pushNotificationsEnabled: false  // Add this
 };
 
 // Games database
