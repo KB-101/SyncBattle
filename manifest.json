@@ -1,7 +1,7 @@
 {
   "name": "PlaySync Arena",
   "short_name": "PlaySync",
-  "description": "Real-time gaming with friends",
+  "description": "Real-time gaming with unique IDs",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#1a1a2e",
@@ -28,10 +28,6 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ],
-  "gcm_sender_id": "103953800507",
-  "permissions": [
-    "notifications"
   ],
   "categories": ["games", "social", "entertainment"],
   "shortcuts": [
