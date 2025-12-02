@@ -353,6 +353,56 @@ function setupEventListeners() {
         }
     });
 }
+// Clear cache button
+    document.getElementById('clearCacheBtn').addEventListener('click', function() {
+        if (confirm('Clear cache and reload app?')) {
+            clearAppCache();
+        }
+    });
+}
+
+// Cache clearing function
+function clearAppCache() {
+    console.log('Clearing app cache...');
+    
+    // Show loading
+    showToast('Clearing cache...', 'info');
+    
+    // Unregister service workers
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(registration) {
+                registration.unregister();
+                console.log('Unregistered service worker');
+            });
+        });
+    }
+    
+    // Clear all caches
+    if ('caches' in window) {
+        caches.keys().then(function(cacheNames) {
+            cacheNames.forEach(function(cacheName) {
+                caches.delete(cacheName);
+                console.log('Deleted cache:', cacheName);
+            });
+        });
+    }
+    
+    // Clear localStorage (keep user data)
+    const userId = localStorage.getItem('playSync_userId');
+    const userName = localStorage.getItem('playSync_userName');
+    localStorage.clear();
+    
+    // Restore user data
+    if (userId) localStorage.setItem('playSync_userId', userId);
+    if (userName) localStorage.setItem('playSync_userName', userName);
+    
+    // Reload with cache busting
+    setTimeout(function() {
+        showToast('Cache cleared! Reloading...', 'success');
+        window.location.href = window.location.href.split('?')[0] + '?v=' + APP_VERSION + '&t=' + Date.now();
+    }, 1000);
+}
 
 // =============================================
 // FIREBASE LISTENERS
