@@ -34,7 +34,8 @@ const appState = {
     unreadNotifications: 0,
     currentFriend: null,
     userFirebaseId: null,
-    pushNotificationsEnabled: false  // Add this
+    pushNotificationsEnabled: false,
+    vapidKey: null
 };
 
 // Games database
@@ -91,13 +92,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         // Initialize push notifications after a delay
         setTimeout(() => {
-            if (window.pushNotifications) {
-                window.pushNotifications.initialize().then(enabled => {
-                    appState.pushNotificationsEnabled = enabled;
-                    console.log('Push notifications enabled:', enabled);
-                });
-            }
-        }, 5000);
+            initializePushNotifications();
+        }, 3000);
         
         console.log('App initialized successfully');
         
@@ -117,6 +113,7 @@ function loadPersistentState() {
     // Load user data
     appState.userId = localStorage.getItem('playSync_userId') || generateUserId();
     appState.userName = localStorage.getItem('playSync_userName') || 'Player';
+    appState.vapidKey = localStorage.getItem('playSync_vapidKey');
     
     // Load friends list
     const savedFriends = localStorage.getItem('playSync_friends');
@@ -145,7 +142,11 @@ function loadPersistentState() {
     document.getElementById('userIdDisplay').textContent = appState.userId;
     document.getElementById('userName').value = appState.userName;
     
-    console.log('Persistent state loaded:', { userId: appState.userId, friends: appState.friends.length });
+    console.log('Persistent state loaded:', { 
+        userId: appState.userId, 
+        friends: appState.friends.length,
+        notifications: appState.notifications.length 
+    });
 }
 
 function savePersistentState() {
@@ -153,6 +154,9 @@ function savePersistentState() {
     localStorage.setItem('playSync_userName', appState.userName);
     localStorage.setItem('playSync_friends', JSON.stringify(appState.friends));
     localStorage.setItem('playSync_notifications', JSON.stringify(appState.notifications));
+    if (appState.vapidKey) {
+        localStorage.setItem('playSync_vapidKey', appState.vapidKey);
+    }
     
     if (appState.activeSession) {
         localStorage.setItem('playSync_activeSession', JSON.stringify(appState.activeSession));
@@ -205,6 +209,10 @@ function generateMessageId() {
 
 function generateNotificationId() {
     return 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+}
+
+function generatePushTokenId() {
+    return 'token_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
 }
 
 // =============================================
@@ -291,7 +299,7 @@ function updateUserInFirebase() {
 }
 
 // =============================================
-// CONNECTION STATUS FUNCTION (MISSING FUNCTION ADDED)
+// CONNECTION STATUS FUNCTION
 // =============================================
 function updateConnectionStatus(connected) {
     const statusElement = document.getElementById('connectionStatus');
@@ -333,6 +341,495 @@ function updateConnectionStatus(connected) {
     }
     
     console.log('Connection status updated:', connected ? 'Online' : 'Offline');
+}
+
+// =============================================
+// PUSH NOTIFICATIONS SYSTEM
+// =============================================
+async function initializePushNotifications() {
+    console.log('Initializing push notifications...');
+    
+    // Check browser support
+    if (!('Notification' in window)) {
+        console.warn('Browser does not support notifications');
+        return;
+    }
+    
+    if (!('serviceWorker' in navigator)) {
+        console.warn('Service Worker not supported');
+        return;
+    }
+    
+    if (!isFirebaseReady || typeof firebase === 'undefined') {
+        console.warn('Firebase not ready for push notifications');
+        return;
+    }
+    
+    // Request notification permission
+    const permission = await requestNotificationPermission();
+    if (permission !== 'granted') {
+        console.warn('Notification permission not granted:', permission);
+        return;
+    }
+    
+    // Initialize Firebase Messaging
+    try {
+        // Make sure messaging is imported
+        if (!firebase.messaging) {
+            console.warn('Firebase Messaging not available');
+            return;
+        }
+        
+        firebaseMessaging = firebase.messaging();
+        
+        // Register service worker for messaging
+        await registerMessagingServiceWorker();
+        
+        // Get or set VAPID key
+        if (!appState.vapidKey) {
+            // You need to set this from Firebase Console
+            // Project Settings → Cloud Messaging → Web configuration
+            appState.vapidKey = 'YOUR_VAPID_KEY_HERE'; // REPLACE THIS
+            localStorage.setItem('playSync_vapidKey', appState.vapidKey);
+        }
+        
+        // Get FCM token
+        await getFCMToken();
+        
+        // Setup message handlers
+        setupFirebaseMessageHandlers();
+        
+        appState.pushNotificationsEnabled = true;
+        console.log('Push notifications initialized successfully');
+        showToast('Push notifications enabled!', 'success');
+        
+    } catch (error) {
+        console.error('Push notification initialization failed:', error);
+        showToast('Push notifications not available', 'warning');
+    }
+}
+
+async function requestNotificationPermission() {
+    if (Notification.permission === 'granted') {
+        return 'granted';
+    }
+    
+    if (Notification.permission === 'denied') {
+        console.warn('Notification permission previously denied');
+        return 'denied';
+    }
+    
+    // Ask user for permission with a custom dialog first
+    const permission = await new Promise((resolve) => {
+        if (confirm('PlaySync Arena would like to send you notifications for game invites and messages. Allow notifications?')) {
+            Notification.requestPermission().then(resolve);
+        } else {
+            resolve('denied');
+        }
+    });
+    
+    console.log('Notification permission result:', permission);
+    return permission;
+}
+
+async function registerMessagingServiceWorker() {
+    try {
+        // Register the messaging service worker
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        console.log('Messaging Service Worker registered:', registration);
+        
+        // Wait for service worker to be ready
+        await navigator.serviceWorker.ready;
+        console.log('Service Worker ready for messaging');
+        
+        return registration;
+    } catch (error) {
+        console.error('Service Worker registration failed:', error);
+        throw error;
+    }
+}
+
+async function getFCMToken() {
+    if (!firebaseMessaging || !appState.vapidKey) {
+        throw new Error('Messaging not initialized');
+    }
+    
+    try {
+        const serviceWorkerRegistration = await navigator.serviceWorker.ready;
+        
+        const token = await firebaseMessaging.getToken({
+            vapidKey: appState.vapidKey,
+            serviceWorkerRegistration: serviceWorkerRegistration
+        });
+        
+        if (!token) {
+            console.log('No FCM token available');
+            return null;
+        }
+        
+        console.log('FCM token received:', token.substring(0, 20) + '...');
+        
+        // Save token to Firebase
+        await saveFCMTokenToFirebase(token);
+        
+        // Setup token refresh listener
+        firebaseMessaging.onTokenRefresh(async () => {
+            console.log('FCM token refreshing...');
+            try {
+                const newToken = await firebaseMessaging.getToken({
+                    vapidKey: appState.vapidKey,
+                    serviceWorkerRegistration: await navigator.serviceWorker.ready
+                });
+                
+                if (newToken) {
+                    console.log('New FCM token received');
+                    await saveFCMTokenToFirebase(newToken);
+                }
+            } catch (refreshError) {
+                console.error('Token refresh failed:', refreshError);
+            }
+        });
+        
+        return token;
+    } catch (error) {
+        console.error('Error getting FCM token:', error);
+        throw error;
+    }
+}
+
+async function saveFCMTokenToFirebase(token) {
+    if (!isFirebaseReady || !appState.userFirebaseId) {
+        console.warn('Cannot save token - user not authenticated');
+        return;
+    }
+    
+    try {
+        const tokenData = {
+            token: token,
+            platform: navigator.platform,
+            userAgent: navigator.userAgent.substring(0, 100),
+            timestamp: Date.now(),
+            appVersion: APP_VERSION
+        };
+        
+        await firebaseDatabase.ref(`pushTokens/${appState.userFirebaseId}`).set(tokenData);
+        console.log('FCM token saved to Firebase');
+    } catch (error) {
+        console.error('Error saving FCM token:', error);
+    }
+}
+
+function setupFirebaseMessageHandlers() {
+    if (!firebaseMessaging) return;
+    
+    // Handle foreground messages (when app is open)
+    firebaseMessaging.onMessage((payload) => {
+        console.log('Foreground message received:', payload);
+        handlePushMessage(payload);
+    });
+    
+    console.log('Firebase message handlers setup complete');
+}
+
+function handlePushMessage(payload) {
+    const { notification, data } = payload;
+    
+    // Show local notification
+    if (notification) {
+        showLocalNotification(
+            notification.title || 'PlaySync Arena',
+            notification.body || 'New notification',
+            data
+        );
+    }
+    
+    // Process notification data
+    if (data) {
+        processPushNotificationData(data);
+    }
+}
+
+function processPushNotificationData(data) {
+    console.log('Processing push data:', data);
+    
+    switch (data.type) {
+        case 'game_invite':
+            handleGameInvitePush(data);
+            break;
+        case 'message':
+            handleMessagePush(data);
+            break;
+        case 'friend_request':
+            handleFriendRequestPush(data);
+            break;
+        case 'session_update':
+            handleSessionUpdatePush(data);
+            break;
+        default:
+            console.warn('Unknown push notification type:', data.type);
+    }
+}
+
+// =============================================
+// PUSH NOTIFICATION TYPE HANDLERS
+// =============================================
+function handleGameInvitePush(data) {
+    console.log('Game invite push received:', data);
+    
+    // Add to notifications list
+    addNotification({
+        type: 'invite_received',
+        message: `${data.fromName} invited you to play ${data.gameName}`,
+        timestamp: data.timestamp || Date.now(),
+        data: data,
+        unread: true
+    });
+    
+    // If app is in background, we'll show notification via service worker
+    // If app is in foreground, show local notification
+    if (document.visibilityState === 'visible') {
+        showLocalNotification(
+            'Game Invite',
+            `${data.fromName} invited you to play ${data.gameName}`,
+            { ...data, action: 'game_invite' }
+        );
+    }
+}
+
+function handleMessagePush(data) {
+    console.log('Message push received:', data);
+    
+    // Add to notifications list
+    addNotification({
+        type: 'message',
+        message: `${data.fromName}: ${data.message}`,
+        timestamp: data.timestamp || Date.now(),
+        data: data,
+        unread: true
+    });
+    
+    // If app is in background, we'll show notification via service worker
+    // If app is in foreground, show local notification
+    if (document.visibilityState === 'visible') {
+        showLocalNotification(
+            'New Message',
+            `${data.fromName}: ${data.message}`,
+            { ...data, action: 'message' }
+        );
+    }
+}
+
+function handleFriendRequestPush(data) {
+    console.log('Friend request push received:', data);
+    
+    addNotification({
+        type: 'friend_request',
+        message: `${data.fromName} wants to be friends`,
+        timestamp: data.timestamp || Date.now(),
+        data: data,
+        unread: true
+    });
+    
+    if (document.visibilityState === 'visible') {
+        showLocalNotification(
+            'Friend Request',
+            `${data.fromName} wants to be friends`,
+            { ...data, action: 'friend_request' }
+        );
+    }
+}
+
+function handleSessionUpdatePush(data) {
+    console.log('Session update push received:', data);
+    
+    addNotification({
+        type: 'session_update',
+        message: data.message || 'Session updated',
+        timestamp: data.timestamp || Date.now(),
+        data: data,
+        unread: true
+    });
+}
+
+// =============================================
+// NOTIFICATION UTILITIES
+// =============================================
+function showLocalNotification(title, body, data = {}) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+        return;
+    }
+    
+    const options = {
+        body: body,
+        icon: './icons/icon-192.png',
+        badge: './icons/icon-96.png',
+        tag: 'playsync-notification-' + Date.now(),
+        data: data,
+        actions: [
+            {
+                action: 'open',
+                title: 'Open App'
+            },
+            {
+                action: 'dismiss',
+                title: 'Dismiss'
+            }
+        ],
+        requireInteraction: data.important || false
+    };
+    
+    // Add vibrate pattern for mobile if supported
+    if ('vibrate' in navigator) {
+        options.vibrate = [100, 50, 100];
+    }
+    
+    const notification = new Notification(title, options);
+    
+    notification.onclick = (event) => {
+        event.preventDefault();
+        window.focus();
+        handleNotificationClick(data);
+        notification.close();
+    };
+    
+    // Auto-close after 10 seconds if not important
+    if (!data.important) {
+        setTimeout(() => notification.close(), 10000);
+    }
+    
+    return notification;
+}
+
+function handleNotificationClick(data) {
+    console.log('Notification clicked:', data);
+    
+    if (!data || !data.type) return;
+    
+    switch (data.type) {
+        case 'game_invite':
+            // We would fetch and show the invite here
+            showToast('Opening game invite...', 'info');
+            break;
+        case 'message':
+            // Open chat with friend
+            if (data.fromName) {
+                const friend = appState.friends.find(f => f.name === data.fromName);
+                if (friend) {
+                    setCurrentFriend(friend);
+                    showToast(`Opening chat with ${friend.name}`, 'info');
+                }
+            }
+            break;
+        case 'friend_request':
+            showToast('Opening friend requests...', 'info');
+            break;
+    }
+    
+    // Mark as read
+    if (data.notificationId) {
+        markNotificationAsRead(data.notificationId);
+    }
+}
+
+// =============================================
+// SEND PUSH NOTIFICATIONS TO FRIENDS
+// =============================================
+async function sendPushNotificationToFriend(friendId, type, data) {
+    if (!isFirebaseReady || !appState.pushNotificationsEnabled) {
+        console.log('Push notifications not enabled, skipping');
+        return false;
+    }
+    
+    const friend = appState.friends.find(f => f.id === friendId);
+    if (!friend || !friend.firebaseId) {
+        console.log('Friend not found or no Firebase ID');
+        return false;
+    }
+    
+    try {
+        // Get friend's push token from Firebase
+        const tokenRef = firebaseDatabase.ref(`pushTokens/${friend.firebaseId}`);
+        const snapshot = await tokenRef.once('value');
+        
+        if (!snapshot.exists()) {
+            console.log('Friend has no push token');
+            return false;
+        }
+        
+        const tokenData = snapshot.val();
+        const token = tokenData.token;
+        
+        // Create notification data
+        let notificationData = {
+            to: token,
+            notification: {},
+            data: {}
+        };
+        
+        switch (type) {
+            case 'game_invite':
+                notificationData.notification = {
+                    title: 'Game Invite',
+                    body: `${appState.userName} invited you to play ${data.gameName}`,
+                    icon: './icons/icon-192.png'
+                };
+                notificationData.data = {
+                    type: 'game_invite',
+                    gameName: data.gameName,
+                    fromName: appState.userName,
+                    fromId: appState.userId,
+                    inviteId: data.inviteId,
+                    timestamp: Date.now(),
+                    action: 'game_invite'
+                };
+                break;
+                
+            case 'message':
+                notificationData.notification = {
+                    title: 'New Message',
+                    body: `${appState.userName}: ${data.message.substring(0, 50)}${data.message.length > 50 ? '...' : ''}`,
+                    icon: './icons/icon-192.png'
+                };
+                notificationData.data = {
+                    type: 'message',
+                    message: data.message,
+                    fromName: appState.userName,
+                    fromId: appState.userId,
+                    timestamp: Date.now(),
+                    action: 'message'
+                };
+                break;
+                
+            case 'friend_request':
+                notificationData.notification = {
+                    title: 'Friend Request',
+                    body: `${appState.userName} wants to be friends`,
+                    icon: './icons/icon-192.png'
+                };
+                notificationData.data = {
+                    type: 'friend_request',
+                    fromName: appState.userName,
+                    fromId: appState.userId,
+                    timestamp: Date.now(),
+                    action: 'friend_request'
+                };
+                break;
+        }
+        
+        // In a real app, you would send this to your backend server
+        // which would then send to FCM. For now, we'll simulate it.
+        console.log('Would send push notification:', {
+            to: token.substring(0, 20) + '...',
+            type: type,
+            data: notificationData.data
+        });
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error sending push notification:', error);
+        return false;
+    }
 }
 
 // =============================================
@@ -435,6 +932,9 @@ async function addFriend(friendId) {
             
             // Setup realtime listener for this friend
             setupFriendListener(friend);
+            
+            // Send push notification to friend
+            await sendPushNotificationToFriend(friendId, 'friend_request', {});
             
             showToast(`Added ${friend.name} as friend`, 'success');
             inputField.value = '';
@@ -542,7 +1042,7 @@ async function startGameSession(gameType, friendId) {
     // Update UI
     updateActiveSessionUI();
     
-    // Send invite to friend
+    // Send invite to friend with push notification
     sendGameInvite(friend, gameInfo, sessionId);
     
     showToast(`Game session started with ${friend.name}`, 'success');
@@ -612,6 +1112,12 @@ async function sendGameInvite(friend, gameInfo, sessionId) {
             data: { friendId: friend.id, game: gameInfo.name }
         });
         
+        // Send push notification
+        await sendPushNotificationToFriend(friend.id, 'game_invite', {
+            gameName: gameInfo.name,
+            inviteId: inviteId
+        });
+        
     } catch (error) {
         console.error('Error sending invite:', error);
         showToast('Failed to send invite', 'error');
@@ -639,7 +1145,11 @@ function handleIncomingInvite(invite) {
         showGameInviteModal(invite, friend);
     } else {
         // Show browser notification
-        showBrowserNotification(`${friendName} invited you to play ${invite.game}`, 'Game Invite');
+        showLocalNotification(
+            'Game Invite',
+            `${friendName} invited you to play ${invite.game}`,
+            { type: 'game_invite', ...invite }
+        );
     }
 }
 
@@ -807,6 +1317,11 @@ async function sendMessage(friendId, message) {
         // Clear input
         document.getElementById('messageInput').value = '';
         
+        // Send push notification
+        await sendPushNotificationToFriend(friendId, 'message', {
+            message: message.trim()
+        });
+        
     } catch (error) {
         console.error('Error sending message:', error);
         showToast('Failed to send message', 'error');
@@ -834,7 +1349,11 @@ function handleIncomingMessage(message) {
     
     // Show browser notification
     if (document.visibilityState !== 'visible') {
-        showBrowserNotification(`${message.fromName}: ${message.message}`, 'New Message');
+        showLocalNotification(
+            'New Message',
+            `${message.fromName}: ${message.message}`,
+            { type: 'message', ...message }
+        );
     }
 }
 
@@ -890,24 +1409,6 @@ function clearAllNotifications() {
     updateNotificationsUI();
     savePersistentState();
     showToast('All notifications cleared', 'info');
-}
-
-function showBrowserNotification(body, title = 'PlaySync Arena') {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
-    
-    const options = {
-        body: body,
-        icon: 'icons/icon-96.png',
-        badge: 'icons/icon-96.png',
-        tag: 'playsync-notification'
-    };
-    
-    const notification = new Notification(title, options);
-    
-    notification.onclick = function() {
-        window.focus();
-        this.close();
-    };
 }
 
 // =============================================
@@ -1277,6 +1778,11 @@ function setupEventListeners() {
             e.target.classList.remove('active');
         }
     });
+    
+    // Add notification permission button
+    setTimeout(() => {
+        setupNotificationPermissionButton();
+    }, 2000);
 }
 
 function sendMessageFromInput() {
@@ -1323,16 +1829,30 @@ function showGameSelectorForFriend(friendId) {
     startGameSession('pool', friendId);
 }
 
+function setupNotificationPermissionButton() {
+    const notificationBtn = document.createElement('button');
+    notificationBtn.className = 'btn secondary small';
+    notificationBtn.innerHTML = '<i class="fas fa-bell"></i> Notifications';
+    notificationBtn.onclick = requestNotificationPermission;
+    notificationBtn.style.marginLeft = '10px';
+    
+    const footerSection = document.querySelector('.footer-section');
+    if (footerSection) {
+        footerSection.appendChild(notificationBtn);
+    }
+}
+
 function showSettings() {
     console.log('=== APP DEBUG INFO ===');
     console.log('App Version:', APP_VERSION);
     console.log('Firebase Ready:', isFirebaseReady);
     console.log('Online:', isOnline);
     console.log('User ID:', appState.userId);
-    console.log('Friends:', appState.friends);
+    console.log('Friends:', appState.friends.length);
     console.log('Active Session:', appState.activeSession);
     console.log('Notifications:', appState.notifications.length);
     console.log('Unread Notifications:', appState.unreadNotifications);
+    console.log('Push Enabled:', appState.pushNotificationsEnabled);
     console.log('=====================');
     
     showToast('Debug info logged to console', 'info');
@@ -1397,4 +1917,10 @@ window.addEventListener('beforeunload', () => {
 // =============================================
 // INITIALIZE APP
 // =============================================
-console.log(`${APP_NAME} v${APP_VERSION} loaded successfully`);;
+console.log(`${APP_NAME} v${APP_VERSION} loaded successfully`);
+
+// Make functions available globally for service worker
+window.appState = appState;
+window.addNotification = addNotification;
+window.setCurrentFriend = setCurrentFriend;
+window.showGameInviteModal = showGameInviteModal;
