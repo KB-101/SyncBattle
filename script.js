@@ -510,13 +510,14 @@ async function initializeFirebase() {
         console.log('Anonymous sign-in successful:', appState.userFirebaseId);
         
         // Setup connection monitoring
-        const connectedRef = firebaseDatabase.ref('.info/connected');
-        connectedRef.on('value', function(snapshot) {
-            const connected = snapshot.val() === true;
-            isOnline = connected;
-            updateConnectionStatus(connected);
-            console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
-        });
+const connectedRef = firebaseDatabase.ref('.info/connected');
+connectedRef.on('value', function(snapshot) {
+    const connected = snapshot.val() === true;
+    isOnline = connected;
+    updateConnectionStatus(connected);
+    updateConnectionUI();  // Add this line
+    console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
+});
         
         // Setup auth state listener
         firebaseAuth.onAuthStateChanged(function(user) {
@@ -1184,24 +1185,32 @@ async function addFriend(friendId) {
     showToast('Searching for user...', 'info');
     
     try {
-        // Search in Firebase
-        const usersRef = firebaseDatabase.ref('users');
-        const snapshot = await usersRef.orderByChild('publicId').equalTo(friendId).once('value');
-        
-        if (snapshot.exists()) {
-            const userData = snapshot.val();
-            const firebaseId = Object.keys(userData)[0];
-            const friendData = userData[firebaseId];
-            
-            // Add to friends list
-            const friend = {
-                id: friendId,
-                name: friendData.name || 'Friend',
-                firebaseId: firebaseId,
-                status: friendData.online ? 'online' : 'offline',
-                lastSeen: friendData.lastSeen || Date.now(),
-                addedAt: Date.now()
-            };
+    // Search in Firebase - FIXED QUERY
+    const usersRef = firebaseDatabase.ref('users');
+    const snapshot = await usersRef.orderByChild('publicId').once('value');
+    
+    let foundUser = null;
+    let foundFirebaseId = null;
+    
+    snapshot.forEach((childSnapshot) => {
+        const userData = childSnapshot.val();
+        if (userData.publicId === friendId) {
+            foundUser = userData;
+            foundFirebaseId = childSnapshot.key;
+            return true; // Stop iteration
+        }
+    });
+    
+    if (foundUser && foundFirebaseId) {
+        // Add to friends list
+        const friend = {
+            id: friendId,
+            name: foundUser.name || 'Friend',
+            firebaseId: foundFirebaseId,
+            status: foundUser.online ? 'online' : 'offline',
+            lastSeen: foundUser.lastSeen || Date.now(),
+            addedAt: Date.now()
+        };
             
             appState.friends.push(friend);
             savePersistentState();
@@ -1217,13 +1226,12 @@ async function addFriend(friendId) {
             inputField.value = '';
             
         } else {
-            showToast('❌ User not found. Make sure they are online.', 'error');
-        }
-        
-    } catch (error) {
-        console.error('Error adding friend:', error);
-        showToast('❌ Failed to add friend', 'error');
+        showToast('User not found. Make sure they are online.', 'error');
     }
+} catch (error) {
+    console.error('Error adding friend:', error);
+    showToast('Failed to add friend', 'error');
+}
 }
 
 function setupFriendListener(friend) {
@@ -1751,6 +1759,23 @@ function updateFriendsUI() {
             showGameSelectorForFriend(friendId);
         });
     });
+}
+
+function updateConnectionUI() {
+    const connectionStatus = document.getElementById('connectionStatus');
+    const connectionText = document.getElementById('connectionText');
+    
+    if (!connectionStatus || !connectionText) return;
+    
+    if (isOnline) {
+        const icon = connectionStatus.querySelector('i');
+        if (icon) icon.className = 'fas fa-circle online';
+        connectionText.textContent = 'Online';
+    } else {
+        const icon = connectionStatus.querySelector('i');
+        if (icon) icon.className = 'fas fa-circle offline';
+        connectionText.textContent = 'Offline';
+    }
 }
 
 function updateOnlineFriendsUI() {
