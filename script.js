@@ -510,14 +510,14 @@ async function initializeFirebase() {
         console.log('Anonymous sign-in successful:', appState.userFirebaseId);
         
         // Setup connection monitoring
-const connectedRef = firebaseDatabase.ref('.info/connected');
-connectedRef.on('value', function(snapshot) {
-    const connected = snapshot.val() === true;
-    isOnline = connected;
-    updateConnectionStatus(connected);
-    updateConnectionUI();  // Add this line
-    console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
-});
+        const connectedRef = firebaseDatabase.ref('.info/connected');
+        connectedRef.on('value', function(snapshot) {
+            const connected = snapshot.val() === true;
+            isOnline = connected;
+            updateConnectionStatus(connected);
+            updateConnectionUI(); // ADDED: Update UI when connection changes
+            console.log('Firebase connection:', connected ? 'ONLINE' : 'OFFLINE');
+        });
         
         // Setup auth state listener
         firebaseAuth.onAuthStateChanged(function(user) {
@@ -574,7 +574,7 @@ function updateUserInFirebase() {
 }
 
 // =============================================
-// CONNECTION STATUS FUNCTION
+// CONNECTION STATUS FUNCTIONS (FIXED)
 // =============================================
 function updateConnectionStatus(connected) {
     const statusElement = document.getElementById('connectionStatus');
@@ -617,6 +617,44 @@ function updateConnectionStatus(connected) {
     }
     
     console.log('Connection status updated:', connected ? 'Online' : 'Offline');
+}
+
+// =============================================
+// CONNECTION UI FUNCTION (MISSING - ADDED)
+// =============================================
+function updateConnectionUI() {
+    // This function updates the connection status in the footer
+    const connectionStatus = document.getElementById('connectionStatus');
+    const connectionText = document.getElementById('connectionText');
+    
+    if (!connectionStatus || !connectionText) return;
+    
+    if (isOnline) {
+        // Update icon
+        const icon = connectionStatus.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-circle online';
+        }
+        connectionText.textContent = 'Online';
+    } else {
+        // Update icon
+        const icon = connectionStatus.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-circle offline';
+        }
+        connectionText.textContent = 'Offline';
+    }
+    
+    // Also update the status dot in user profile
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    
+    if (statusDot) {
+        statusDot.className = isOnline ? 'status-dot online' : 'status-dot';
+    }
+    if (statusText) {
+        statusText.textContent = isOnline ? 'Online' : 'Offline';
+    }
 }
 
 // =============================================
@@ -711,7 +749,7 @@ async function requestNotificationPermission() {
 async function registerMessagingServiceWorker() {
     try {
         // Register the messaging service worker
-        const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+        const registration = await navigator.serviceWorker.register('/SyncBattle/firebase-messaging-sw.js');
         console.log('Messaging Service Worker registered:', registration);
         
         // Wait for service worker to be ready
@@ -1159,7 +1197,7 @@ function setupRealtimeListeners() {
 }
 
 // =============================================
-// FRIEND MANAGEMENT
+// FRIEND MANAGEMENT (FIXED VERSION)
 // =============================================
 async function addFriend(friendId) {
     const inputField = document.getElementById('friendId');
@@ -1185,32 +1223,33 @@ async function addFriend(friendId) {
     showToast('Searching for user...', 'info');
     
     try {
-    // Search in Firebase - FIXED QUERY
-    const usersRef = firebaseDatabase.ref('users');
-    const snapshot = await usersRef.orderByChild('publicId').once('value');
-    
-    let foundUser = null;
-    let foundFirebaseId = null;
-    
-    snapshot.forEach((childSnapshot) => {
-        const userData = childSnapshot.val();
-        if (userData.publicId === friendId) {
-            foundUser = userData;
-            foundFirebaseId = childSnapshot.key;
-            return true; // Stop iteration
-        }
-    });
-    
-    if (foundUser && foundFirebaseId) {
-        // Add to friends list
-        const friend = {
-            id: friendId,
-            name: foundUser.name || 'Friend',
-            firebaseId: foundFirebaseId,
-            status: foundUser.online ? 'online' : 'offline',
-            lastSeen: foundUser.lastSeen || Date.now(),
-            addedAt: Date.now()
-        };
+        // Search in Firebase - FIXED QUERY
+        const usersRef = firebaseDatabase.ref('users');
+        const snapshot = await usersRef.orderByChild('publicId').once('value');
+        
+        let foundUser = null;
+        let foundFirebaseId = null;
+        
+        // Manually search through users
+        snapshot.forEach((childSnapshot) => {
+            const userData = childSnapshot.val();
+            if (userData.publicId === friendId) {
+                foundUser = userData;
+                foundFirebaseId = childSnapshot.key;
+                return true; // Stop iteration
+            }
+        });
+        
+        if (foundUser && foundFirebaseId) {
+            // Add to friends list
+            const friend = {
+                id: friendId,
+                name: foundUser.name || 'Friend',
+                firebaseId: foundFirebaseId,
+                status: foundUser.online ? 'online' : 'offline',
+                lastSeen: foundUser.lastSeen || Date.now(),
+                addedAt: Date.now()
+            };
             
             appState.friends.push(friend);
             savePersistentState();
@@ -1226,12 +1265,19 @@ async function addFriend(friendId) {
             inputField.value = '';
             
         } else {
-        showToast('User not found. Make sure they are online.', 'error');
+            showToast('❌ User not found. Make sure they are online.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error adding friend:', error);
+        
+        // Check if it's a permission error
+        if (error.message && error.message.includes('permission_denied')) {
+            showToast('⚠️ Permission denied. Check Firebase security rules.', 'error');
+        } else {
+            showToast('❌ Failed to add friend', 'error');
+        }
     }
-} catch (error) {
-    console.error('Error adding friend:', error);
-    showToast('Failed to add friend', 'error');
-}
 }
 
 function setupFriendListener(friend) {
@@ -1697,13 +1743,13 @@ function clearAllNotifications() {
 }
 
 // =============================================
-// UI UPDATES
+// UI UPDATES (FIXED)
 // =============================================
 function updateAllUI() {
     updateFriendsUI();
     updateOnlineFriendsUI();
     updateNotificationsUI();
-    updateConnectionUI();
+    updateConnectionUI(); // This function now exists!
 }
 
 function updateFriendsUI() {
@@ -1759,23 +1805,6 @@ function updateFriendsUI() {
             showGameSelectorForFriend(friendId);
         });
     });
-}
-
-function updateConnectionUI() {
-    const connectionStatus = document.getElementById('connectionStatus');
-    const connectionText = document.getElementById('connectionText');
-    
-    if (!connectionStatus || !connectionText) return;
-    
-    if (isOnline) {
-        const icon = connectionStatus.querySelector('i');
-        if (icon) icon.className = 'fas fa-circle online';
-        connectionText.textContent = 'Online';
-    } else {
-        const icon = connectionStatus.querySelector('i');
-        if (icon) icon.className = 'fas fa-circle offline';
-        connectionText.textContent = 'Offline';
-    }
 }
 
 function updateOnlineFriendsUI() {
@@ -1885,43 +1914,7 @@ function updateNotificationsUI() {
         }
     }
 }
-// =============================================
-// CONNECTION UI FUNCTION (MISSING - ADD THIS)
-// =============================================
-function updateConnectionUI() {
-    // This function updates the connection status in the footer
-    const connectionStatus = document.getElementById('connectionStatus');
-    const connectionText = document.getElementById('connectionText');
-    
-    if (!connectionStatus || !connectionText) return;
-    
-    if (isOnline) {
-        // Update icon
-        const icon = connectionStatus.querySelector('i');
-        if (icon) {
-            icon.className = 'fas fa-circle online';
-        }
-        connectionText.textContent = 'Online';
-    } else {
-        // Update icon
-        const icon = connectionStatus.querySelector('i');
-        if (icon) {
-            icon.className = 'fas fa-circle offline';
-        }
-        connectionText.textContent = 'Offline';
-    }
-    
-    // Also update the status dot in user profile
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
-    
-    if (statusDot) {
-        statusDot.className = isOnline ? 'status-dot online' : 'status-dot';
-    }
-    if (statusText) {
-        statusText.textContent = isOnline ? 'Online' : 'Offline';
-    }
-}
+
 // =============================================
 // UTILITY FUNCTIONS
 // =============================================
@@ -2227,11 +2220,13 @@ function installPWA() {
 window.addEventListener('online', () => {
     showToast('✅ Back online', 'success');
     updateConnectionStatus(true);
+    updateConnectionUI();
 });
 
 window.addEventListener('offline', () => {
     showToast('⚠️ You are offline', 'warning');
     updateConnectionStatus(false);
+    updateConnectionUI();
 });
 
 // =============================================
